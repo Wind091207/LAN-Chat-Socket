@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS / archive metadata
+.vscode/
+.idea/
+.vs/
+.DS_Store
+Thumbs.db
+__MACOSX/
+._*
+
+# Output, logs, received files
+*.log
+downloads/*
+!downloads/.gitkeep
+
+# C++/Visual Studio examples (if locally present)
+Debug/
+Release/
+x64/
+*.suo
+*.vcxproj.user
+*.sln.docstates
+
+# Course reference material kept locally, not for redistribution
+reference-materials-local/
