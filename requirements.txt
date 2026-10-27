@@ -1,33 +1,40 @@
-# LAN Chat & File Sharing — Python 3
+# LAN Chat & File Sharing | Python 3 | Setup cho ca do an
 #
-# Cài các thư viện bên dưới bằng:
-#   python -m pip install -r requirements.txt
+# MOI THANH VIEN: tao virtual environment trong thu muc repo, sau do chay:
+#   py -3 -m venv .venv
+#   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 #
-# Milestone 1 — TCP echo + UDP send/receive:
-#   Không cần pip install gì thêm. socket có sẵn trong Python.
+# Hai goi duoi day la bo cong cu Python nhom du kien dung cho toan bo do an.
+# De pin phien ban de 3 may cai giong nhau; chua xac nhan da test tren moi may.
 #
-# Milestone 2 — UDP discovery / online / away:
-#   Dùng socket, time, threading (đều có sẵn).
+# M4 - Console: hien tin nhan moi ma khong mat dong dang go.
+# De bai cung cho phep tu redraw bang msvcrt neu nhom khong chon goi nay.
+prompt_toolkit==3.0.53
 #
-# Milestone 3 — TCP chat / framing / nhiều peer:
-#   Dùng socket, threading, struct, queue, json... (đều có sẵn).
+# M1-M5 - Unit/integration tests: chay va tu dong kiem tra ket qua.
+# La cong cu nhom TU CHON, khong phai thu vien giao vien bat buoc.
+pytest==9.1.1
 #
-# Milestone 4 — Console nhận tin trong lúc đang gõ + gửi file:
-#   Mặc định thử phương án A trong đề: prompt_toolkit để giữ dòng nhập
-#   khi có tin nhắn đến. Đã hỗ trợ Python 3.10+ (gồm Python 3.14).
-#   Nếu nhóm chuyển sang phương án B tự redraw bằng msvcrt, có thể
-#   xóa/comment dòng dưới vì không cần thư viện ngoài.
-prompt_toolkit>=3.0.53,<4.0
+# KHONG CAN pip install cho:
+# M1  TCP echo / UDP send-receive: socket, sys.
+# M2  UDP discovery/status: socket, time, threading.
+# M3  TCP chat/framing: socket, threading, struct, queue, json.
+# M4  File transfer: pathlib, os, hashlib, tempfile.
+# M5  Logging/tests: logging, unittest (neu khong dung pytest).
+# Tat ca ten ke tren la Python Standard Library.
 #
-# Milestone 5 — Testing, Wireshark, báo cáo, demo:
-#   unittest, tempfile, pathlib, hashlib, logging... có sẵn.
-#   Nếu cả nhóm quyết định dùng pytest để viết test thì bỏ dấu #:
-# pytest>=8,<10
+# PHAN MEM CAN CAI RIENG (pip KHONG cai duoc):
+# - Python 3.10+ (nhom nen thong nhat 1 phien ban, VD Python 3.14).
+# - Git (clone/push/merge GitHub).
+# - VS Code + extension Python cua Microsoft (neu nhom dung VS Code).
+# - Wireshark + Npcap tren Windows (bat UDP broadcast va TCP handshake).
+# - Kiem tra Windows Firewall khi thu ket noi giua >=2 may trong LAN.
 #
-# CÀI RIÊNG TRÊN MÁY (KHÔNG phải package pip):
-#   - Python 3 + VS Code/Python extension + Git (để code và push)
-#   - Wireshark (bắt gói UDP broadcast, TCP 3-way handshake ở M5)
+# KHONG BAT BUOC / KHONG CAN CAI THEM:
+# - Flask, Django, database, WSL, Docker, C++/Visual Studio, PyInstaller.
+# - 'socket', 'threading', 'pip install os' (cac thu vien nay co san).
+# - netcat/nc: chi la cong cu kiem tra mang tuy chon trong goi y cua de.
 #
-# Không cần cài "socket", "threading", "os", "time" bằng pip.
-# Khi chốt thư viện giao diện và đã test trên các máy, nhóm có thể
-# cố định phiên bản để cả ba dùng môi trường giống nhau.
+# Ghi chu: De goc LAN_Chat_Socket_Project.docx yeu cau native Socket API,
+# UDP discovery, TCP chat/file, console hoac GUI, multithreading,
+# Wireshark evidence, README, bao cao va demo; khong chi dinh goi pip cu the.
