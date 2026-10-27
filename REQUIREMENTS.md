@@ -133,3 +133,17 @@
 ---
 
 **Quy tắc theo dõi:** đánh dấu `[x]` khi đã chạy test đúng yêu cầu, ghi lại ai kiểm thử, ngày, kết quả và bằng chứng trong GitHub Issue/nhật ký nhóm. **Push code chưa đồng nghĩa đã hoàn thành.**
+
+
+## 9. Tài liệu tham khảo
+
+**Nguồn yêu cầu:** `LAN_Chat_Socket_Project.docx` do giảng viên cung cấp. Các link bên dưới là tài liệu học và tra cứu kỹ thuật, **không thay thế yêu cầu trong đề**.
+
+- [Python — Socket Programming HOWTO](https://docs.python.org/3/howto/sockets.html) — kiến thức TCP Socket, đặc biệt cách gửi/nhận dữ liệu (Milestone 1, 3).
+- [Python — socket](https://docs.python.org/3/library/socket.html) — tra cứu các hàm `bind()`, `listen()`, `accept()`, `connect()`, `sendall()`, `recv()`, `sendto()`, `recvfrom()` (Milestone 1–4).
+- [Python — threading](https://docs.python.org/3/library/threading.html) — thread và `Lock` khi xử lý nhiều peer (Milestone 2–4).
+- [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/) — tham khảo thêm về TCP, UDP, socket và broadcast; ví dụ chủ yếu dùng C.
+- [prompt_toolkit](https://python-prompt-toolkit.readthedocs.io/en/master/) — giao diện console, nhập liệu khi có tin nhắn đến (Milestone 4, **tùy chọn**).
+- [pytest](https://docs.pytest.org/en/stable/) — viết và chạy test tự động trong `tests/` (**tùy chọn**).
+- [Wireshark User's Guide](https://www.wireshark.org/docs/wsug_html_chunked/) — bắt và phân tích UDP/TCP để làm bằng chứng (Milestone 5).
+- [PEP 8 — Style Guide for Python Code](https://peps.python.org/pep-0008/) — quy ước viết Python dễ đọc, nhất quán.
