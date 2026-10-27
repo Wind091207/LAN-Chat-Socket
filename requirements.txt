@@ -1,2 +1,0 @@
-# Chưa có mã nguồn triển khai
-# Thêm các dependencies được nhóm xác nhận và kiểm thử, không thêm thư viện chỉ vì tài liệu demo sử dụng.
