@@ -40,4 +40,4 @@ Phân vai là **đề xuất ban đầu**, nhóm sẽ xác nhận người phụ
 
 ## Cài đặt và chạy
 
-**Chưa có ứng dụng hoàn chỉnh để chạy.** Lệnh cài đặt, chạy và kiểm thử sẽ được bổ sung sau khi nhóm tự kiểm tra thành công. File `requirements.txt` chỉ dành cho các thư viện Python bên ngoài cần cài, không dùng để ghi yêu cầu đồ án.
+**Chưa có ứng dụng hoàn chỉnh để chạy.** Lệnh cài đặt, chạy và kiểm thử sẽ được bổ sung sau khi nhóm tự kiểm tra thành công. Xem **[SetUp.md](SetUp.md)** để chuẩn bị Python, Git, VS Code, Wireshark và cài các thư viện dự kiến sử dụng.
