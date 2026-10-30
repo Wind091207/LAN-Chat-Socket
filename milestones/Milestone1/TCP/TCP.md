@@ -12,3 +12,19 @@
 ### Yêu cầu 
 
 => tính chất của mạng "Echo" đòi hỏi sự phản hồi (như tiếng vang), tức là **Client gửi -> Server nhận rồi ném ngược lại y hệt -> Client hứng lấy và in ra**.
+
+### Luồng hoạt động của UDP Socket
+
+```text
+[ Server / Listener ]                       [ Client / Sender ]
+        │                                            │
+    socket()                                     socket()
+        │                                            │
+     bind()                                       bind()* (Optional)
+        │                                            │
+ recvfrom() <─────── (Datagram Packet) ────────── sendto()
+        │                                            │
+ sendto()   ────────── (Reply Data) ────────────> recvfrom()
+        │                                            │
+     close()                                      close()
+```
