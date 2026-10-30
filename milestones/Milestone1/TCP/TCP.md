@@ -13,18 +13,28 @@
 
 => tính chất của mạng "Echo" đòi hỏi sự phản hồi (như tiếng vang), tức là **Client gửi -> Server nhận rồi ném ngược lại y hệt -> Client hứng lấy và in ra**.
 
-### Luồng hoạt động của UDP Socket
+#### **Vai trò trong đồ án**
+TCP được sử dụng cho tính năng **Chat tin nhắn trực tiếp** và **Truyền nhận File**.
+*   Mỗi cuộc trò chuyện hoặc mỗi lần gửi file sẽ mở một kênh kết nối TCP unicast giữa hai peer.
+*   Đảm bảo không bị mất mát hoặc sai lệch nội dung tin nhắn và dữ liệu file.
+
+#### **Luồng hoạt động của TCP Socket**
 
 ```text
-[ Server / Listener ]                       [ Client / Sender ]
-        │                                            │
-    socket()                                     socket()
-        │                                            │
-     bind()                                       bind()* (Optional)
-        │                                            │
- recvfrom() <─────── (Datagram Packet) ────────── sendto()
-        │                                            │
- sendto()   ────────── (Reply Data) ────────────> recvfrom()
-        │                                            │
-     close()                                      close()
+[ TCP Server ]                               [ TCP Client ]
+      │                                            │
+  socket()                                     socket()
+      │                                            │
+   bind()                                          │
+      │                                            │
+  listen()                                         │
+      │                                            │
+  accept()  <──── (SYN / 3-Way Handshake) ────  connect()
+      │                                            │
+   recv()   <───────── (Byte Stream) ──────────  sendall()
+      │                                            │
+  sendall() ────────── (Byte Stream) ──────────>   recv()
+      │                                            │
+   close()  <────── (FIN / Connection Close) ──   close()
 ```
+
