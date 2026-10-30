@@ -1,56 +1,93 @@
-# Milestone 1 — TCP & UDP Fundamentals
+# Milestone 1 — TCP & UDP Socket
 
 ## 1. Mục tiêu
 
-Theo mục 6 của `LAN_Chat_Socket_Project.docx`:
+Theo `LAN_Chat_Socket_Project.docx`, Milestone 1 yêu cầu:
 
-- Xây dựng chương trình TCP Echo Client/Server.
-- Xây dựng chương trình UDP Send/Receive.
+- **TCP Echo Client/Server:** Client gửi dữ liệu → Server nhận → gửi trả dữ liệu → Client hiển thị.
+- **UDP Send/Receive:** Sender gửi Datagram → Receiver nhận và hiển thị dữ liệu.
 
-**Checkpoint:** Demo thành công cả hai chương trình.
+**Checkpoint:** Demo được cả hai chương trình.
 
-## 2. Kiến thức cần tìm hiểu
+## 2. Phân công
 
-### TCP Socket
-- Sự khác biệt giữa TCP và UDP.
-- `socket()`, `bind()`, `listen()`, `accept()`.
-- `connect()`, `sendall()`, `recv()`, `close()`.
-- Cách client và server thiết lập kết nối, truyền dữ liệu.
-
-### UDP Socket
-- UDP Datagram.
-- `SOCK_DGRAM`.
-- `bind()`, `sendto()`, `recvfrom()`.
-- Cách gửi và nhận dữ liệu không cần thiết lập kết nối TCP.
-
-## 3. Phân công dự kiến
-
-| Công việc | Phụ trách |
+| Thành viên | Công việc |
 |---|---|
-| TCP Echo Client/Server | Thành viên B |
-| UDP Send/Receive | Thành viên A |
-| Kiểm thử và tổng hợp kết quả | Thành viên C |
+| A | UDP Sender/Receiver |
+| B | TCP Echo Client/Server |
+| C | Kiểm thử và tổng hợp kết quả |
 
-Cả ba thành viên cần hiểu và tự chạy được hai bài thực hành.
+## 3. TCP Echo
 
-## 4. Hướng dẫn chạy
+TCP là giao thức hướng kết nối, cung cấp luồng byte tin cậy và có thứ tự.
 
-*Sẽ bổ sung sau khi các chương trình đã được viết và kiểm thử thành công.*
+**Luồng hoạt động:**
 
-## 5. Tiến độ
+`Server: socket() → bind() → listen() → accept() → recv() → sendall()`
 
-- [ ] TCP Echo Client/Server hoàn thành và kiểm thử.
-- [ ] UDP Send/Receive hoàn thành và kiểm thử.
-- [ ] Cả ba thành viên hiểu cơ chế hoạt động.
-- [ ] Kiểm tra và tổng hợp kết quả Milestone 1.
+`Client: socket() → connect() → sendall() → recv()`
 
-## 6. Những vấn đề gặp phải và giải pháp
+**Cấu hình:** `127.0.0.1:65431` (TCP).
 
-*Sẽ bổ sung các vấn đề thực tế trong quá trình triển khai, bao gồm nguyên nhân, cách xử lý và kết quả.*
+**Cách chạy:** Mở hai Terminal tại thư mục chứa code.
 
-## 7. Tài liệu tham khảo
+Terminal 1:
 
-- `LAN_Chat_Socket_Project.docx`.
-- `Seminar_Socket Programming.pdf`.
-- `HDLT_Socket.pdf`.
-- Các ví dụ Socket Python do giảng viên cung cấp.
+`python TCP_Server.py`
+
+Terminal 2:
+
+`python TCP_Client.py`
+
+Nhập tin nhắn ở Client và quan sát dữ liệu Echo. Nhập `quit` để kết thúc kết nối phía Client.
+
+Xem `TCP.md` để đọc phần lý thuyết chi tiết.
+
+## 4. UDP Send/Receive
+
+UDP là giao thức không kết nối, truyền dữ liệu dưới dạng Datagram và không đảm bảo giao hàng.
+
+**Luồng hoạt động:**
+
+`Sender: socket() → encode() → sendto()`
+
+`Receiver: socket() → bind() → recvfrom() → decode()`
+
+**Cấu hình:** Receiver lắng nghe UDP port `5000`; Sender gửi tới `127.0.0.1:5000`.
+
+**Cách chạy:**
+
+Terminal 1:
+
+`python UDP_receiver.py`
+
+Terminal 2:
+
+`python UDP_sender.py`
+
+Nhập nội dung tiếng Việt để kiểm tra UTF-8. Nhập `quit` hoặc `exit` ở Sender để thoát.
+
+## 5. Kiểm thử
+
+| Trường hợp | Kết quả mong đợi |
+|---|---|
+| TCP Connection | Client kết nối Server |
+| TCP Echo | Client nhận lại đúng dữ liệu |
+| TCP Disconnect | Server xử lý được việc Client đóng kết nối |
+| UDP Datagram | Receiver nhận đúng dữ liệu |
+| UDP UTF-8 | Hiển thị chính xác tiếng Việt |
+| UDP Source Address | Hiển thị IP và port của Sender |
+
+**Tình trạng:** Đã kiểm thử nhanh việc gửi/nhận TCP và UDP trên localhost. Còn lỗi TCP Server khi Client ngắt kết nối không gửi `quit`; cần sửa và kiểm thử lại trước khi xác nhận hoàn thành.
+
+## 6. Tài liệu tham khảo
+
+- `LAN_Chat_Socket_Project.docx` — yêu cầu chính thức.
+- `Seminar_Socket Programming.pdf` — slide 8–12.
+- `01_server.py`, `01_client.py`, `02_server.py`, `02_client.py` — demo TCP.
+- `udp_broadcast_demo.py` — tham khảo UDP.
+- `TCP.md` — ghi chú lý thuyết TCP của nhóm.
+
+## 7. Kết luận
+
+Milestone 1 tập trung vào nền tảng TCP và UDP Socket. Sau khi sửa lỗi, chạy lại các bài kiểm thử và được review, nhóm sẽ hoàn thành checkpoint trước khi chuyển sang UDP Discovery ở Milestone 2.
