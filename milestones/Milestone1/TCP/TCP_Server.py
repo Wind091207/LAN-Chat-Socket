@@ -13,6 +13,10 @@ while True:
         print("Connected by: ", addr)
         while True:
             data = conn.recv(1024)
+            
+            if data == "b''":
+                break
+            
             data_str = data.decode("utf8")
             
             if data_str == "quit":
