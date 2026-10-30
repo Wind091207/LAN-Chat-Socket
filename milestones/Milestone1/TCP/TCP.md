@@ -38,3 +38,21 @@ TCP được sử dụng cho tính năng **Chat tin nhắn trực tiếp** và *
    close()  <────── (FIN / Connection Close) ──   close()
 ```
 
+### Kiểm thử TCP Echo Client/Server
+
+Mở 2 cửa sổ Terminal độc lập:
+
+**Terminal 1 (Chạy Server):**
+```bash
+python tcp_echo_server.py
+```
+*Server sẽ mở socket, bind vào cổng 5000 và chờ kết nối.*
+
+**Terminal 2 (Chạy Client):**
+```bash
+python tcp_echo_client.py
+```
+*Nhập văn bản từ Terminal Client. Server sẽ nhận và echo (phản hồi) lại chính xác nội dung đó.*
+
+---
+
