@@ -123,7 +123,19 @@ python .\UDP_sender.py
 
 **Ghi chú:** UDP không thiết lập kết nối. Sender đóng Socket không làm Receiver tự động dừng.
 
-## 5. Giới hạn và hướng phát triển
+## 5. Vấn đề gặp phải và cách khắc phục
+
+| Vấn đề thực tế | Nguyên nhân / nhận xét | Cách xử lý và trạng thái |
+|---|---|---|
+| TCP Client nhập `quit`, Server có lúc lặp lại liên tục sau khi Client ngắt | Server chưa xử lý đúng trường hợp `recv()` trả về dữ liệu rỗng khi phía bên kia đóng kết nối | Bổ sung xử lý Client ngắt: đóng socket của Client và quay về chờ kết nối mới. **Đã sửa và kiểm thử lại (TCP-03: PASS)** |
+| Gửi 1238 byte nhưng Client chỉ đọc được 1024 byte trong một lần `recv(1024)` | TCP là dòng byte; một lần `recv()` không bảo đảm nhận đủ cả thông điệp | **Đã ghi nhận giới hạn, chưa khắc phục trong M1**. M3 sẽ thiết kế framing và vòng lặp đọc đủ dữ liệu |
+| `Ctrl+C` khi Server/Receiver đang chờ `accept()` hoặc `recvfrom()` có thể không dừng ngay | Lời gọi socket chờ dữ liệu/kết nối nên việc thoát có thể bị trì hoãn tùy môi trường | Đã bổ sung hướng xử lý `KeyboardInterrupt` và đóng socket cho TCP Server; **vẫn ghi nhận giới hạn dừng ngay trong một số trường hợp**, tiếp tục hoàn thiện ở M5 |
+| UDP Sender gửi khi Receiver chưa chạy vẫn không báo lỗi | UDP không thiết lập kết nối và `sendto()` thành công không đồng nghĩa bên nhận đã nhận được datagram | **Không phải lỗi chương trình**. Cần khởi động Receiver trước và kiểm tra log bên nhận để xác nhận dữ liệu |
+| UDP Sender thoát nhưng Receiver vẫn chờ | UDP không có kết nối để bên nhận tự biết Sender đã thoát | **Hành vi đúng của UDP**. Dừng Receiver riêng; M2 thay cách gửi thủ công bằng HELLO định kỳ và timeout peer |
+
+**Bài học:** Phân biệt lỗi cần sửa với hành vi bình thường của TCP/UDP; ghi rõ các trường hợp đã PASS và các giới hạn chuyển sang milestone tiếp theo.
+
+## 6. Giới hạn và hướng phát triển
 
 | Vấn đề | Milestone tiếp theo |
 |---|---|
@@ -133,7 +145,7 @@ python .\UDP_sender.py
 | Chưa có Console UI và File Transfer | M4 |
 | Chưa xử lý đầy đủ lỗi Socket, Peer Crash và Shutdown | M5 |
 
-## 6. Tài liệu tham khảo
+## 7. Tài liệu tham khảo
 
 - `LAN_Chat_Socket_Project.docx` — yêu cầu chính thức.
 - `Seminar_Socket Programming.pdf` — slide 8–12.
@@ -141,7 +153,7 @@ python .\UDP_sender.py
 - `01_client.py`, `01_server.py`, `02_client.py`, `02_server.py` — TCP.
 - `udp_broadcast_demo.py` — UDP, dùng sâu hơn ở M2.
 
-## 7. Kết luận
+## 8. Kết luận
 
 Đã triển khai và kiểm thử thành công hai chức năng cơ bản:
 
