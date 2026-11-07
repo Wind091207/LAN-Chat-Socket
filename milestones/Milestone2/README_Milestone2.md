@@ -78,7 +78,18 @@ C dùng `Lock` để bảo vệ Registry khi nhiều thread truy cập; A dùng 
 
 Ảnh terminal và Wireshark cần được lưu vào thư mục minh chứng của nhóm. Đây là **một máy vật lý + một máy ảo**, chưa thay cho demo hai máy vật lý.
 
-## 5. Giới hạn và bước tiếp theo
+## 5. Vấn đề gặp phải và cách khắc phục
+
+| Vấn đề thực tế | Nguyên nhân | Cách khắc phục và kết quả |
+|---|---|---|
+| **M2-01:** Receiver Thread dừng khi nhận `HELLO|Broken|5003|busy` | `peer_registry.update_peer()` từ chối status `busy` và ném `ValueError`; exception trước đó làm thoát vòng nhận UDP | Bọc lời gọi `registry.update_peer(...)` bằng `try/except (ValueError, TypeError)` và `continue` để bỏ qua HELLO không hợp lệ. **Đã sửa, kiểm thử lại: PASS** |
+| Hai máy khác IP nhưng trùng nickname và TCP port không nhìn thấy nhau | Điều kiện lọc HELLO của chính máy chỉ so sánh `name` và `tcp_port`, nên bỏ nhầm HELLO từ peer khác | Bổ sung so sánh `peer_ip` với địa chỉ IP cục bộ dùng để broadcast. Đã kiểm thử Windows `192.168.56.1` và Ubuntu `192.168.56.104` cùng tên `Quan`, port `5001`: **PASS trên mạng Host-only**; giải pháp chưa bao quát mọi cấu hình nhiều interface |
+| Test với `--bcast 127.0.0.1` không chứng minh discovery giữa hai máy | `127.0.0.1` là loopback của từng máy, không phải broadcast LAN | Thiết lập mạng VirtualBox Host-only và gửi tới broadcast của subnet (đã thử `192.168.56.255:9999`). Wireshark xác nhận HELLO từ hai IP, chu kỳ khoảng 3 giây: **PASS** |
+| Thông báo `online/offline` xuất hiện chen vào dòng nhập, con trỏ không trở lại sau dấu `>` | Main Thread đang chạy `input()` trong khi Event Thread gọi `print()`; chưa có cơ chế redraw giao diện | **Chưa xử lý trong M2**. Chuyển sang M4: Console Redraw và đồng bộ đầu ra; không đánh dấu lỗi này là đã sửa |
+
+**Lưu ý về phạm vi test:** Các kết quả trên được ghi nhận từ Windows host + Ubuntu VirtualBox trên mạng Host-only; cần tiếp tục kiểm thử trên hai máy vật lý khi thực hiện demo cuối.
+
+## 6. Giới hạn và bước tiếp theo
 
 - Chưa có TCP Chat, Message Framing hay gửi file: tiếp tục ở các milestone sau.
 - Việc in sự kiện có thể chen vào dòng `input()`; console redraw hoàn chỉnh xử lý ở M4.
