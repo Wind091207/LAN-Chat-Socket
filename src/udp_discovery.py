@@ -2,7 +2,12 @@ import socket
 import threading
 import time
 
-
+# module này sẽ tự tạo và gửi HELLO mỗi 3s
+# python main.py --name Quan --tcp-port 5001 chạy
+# sau khi chạy là module này đã tự động gửi HELLO mỗi 3s
+# Khi nhập /list ở B, A vẫn gửi HELLO
+# Khi set_status("away") thì trong thông điệp HELLO A tự chuyển online -> away chẳng hạn
+# Khi gõ /quit A dừng gửi HELLO
 class UDPDiscovery:
     def __init__(
         self,
@@ -73,19 +78,20 @@ class UDPDiscovery:
     def _send_loop(self):
         while self.running:
             with self._lock:
-                current_status = self.status
+                current_status = self.status # sau khi set_status xong thì được gán vô current_status
 
-            msg = f"HELLO|{self.name}|{self.tcp_port}|{current_status}"
+            msg = f"HELLO|{self.name}|{self.tcp_port}|{current_status}" # gửi HELLO
             data = msg.encode("utf-8")
 
             try:
-                self.sock.sendto(data, (self.bcast_addr, self.port))
+                self.sock.sendto(data, (self.bcast_addr, self.port)) # Gửi đến: Địa chỉ broadcast/địa chỉ nhận
             except OSError:
                 pass
 
-            time.sleep(3)
-
-    def _recv_loop(self):
+            time.sleep(3) # chu kỳ 3s
+    # => cơ chế quảng bá sự hiện diện / phát hiện thiết bị (Device Discovery / Heartbeat) trong mạng LAN sử dụng giao thức UDP.
+    
+    def _recv_loop(self): # trong cùng 1 LAN có 2 thg ví dụ ở đây là Minh sẽ nhận được câu trả lời từ Quan dựa trên hàm này
         while self.running:
             try:
                 data, addr = self.sock.recvfrom(1024)
@@ -95,7 +101,7 @@ class UDPDiscovery:
                 break
 
             msg = data.decode("utf-8", errors="replace")
-            parts = msg.split("|")
+            parts = msg.split("|") # nhận dữ liệu UDP từ Quan và tách thành ["HELLO", "Minh", "5002", "away"]
 
             if len(parts) == 4 and parts[0] == "HELLO":
                 peer_name = parts[1]
@@ -112,6 +118,9 @@ class UDPDiscovery:
                     continue
 
                 if self.registry:
-                    self.registry.update_peer(
-                        peer_name, peer_ip, peer_tcp_port, peer_status
-                    )
+                    try:
+                        self.registry.update_peer(
+                            peer_name, peer_ip, peer_tcp_port, peer_status # NGAY LỆNH NÀY UPDATE PEER NHẬN ĐƯỢC TỪ QUAN
+                        )
+                    except (ValueError, TypeError):
+                        continue
