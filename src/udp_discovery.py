@@ -22,6 +22,7 @@ class UDPDiscovery:
         self.registry = registry
         self.bcast_addr = bcast_addr
         self.port = port
+        self.local_ip = None
 
         self.status = "online"
         self.running = False
@@ -47,6 +48,11 @@ class UDPDiscovery:
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.sock.bind(("", self.port))
         self.sock.settimeout(1.0)
+
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            probe.connect((self.bcast_addr, self.port))
+            self.local_ip = probe.getsockname()[0]
 
         self.running = True
 
@@ -114,7 +120,9 @@ class UDPDiscovery:
                 peer_status = parts[3]
                 peer_ip = addr[0]
 
-                if peer_name == self.name and peer_tcp_port == self.tcp_port:
+                if (peer_name == self.name
+                    and peer_tcp_port == self.tcp_port
+                    and peer_ip == self.local_ip):
                     continue
 
                 if self.registry:
