@@ -49,11 +49,11 @@ def main():
     )
 
     try:
-        tcp.start()                       # Mở cổng TCP trước để sẵn sàng nhận kết nối
+        tcp.start()
         registry.start_timeout_monitor()
         discovery.start()
         print(f"[*] {args.name}: listening TCP {args.tcp_port}, UDP broadcast 9999")
-        run_cli(registry, discovery, tcp, chat_state, events)
+        run_cli(registry, discovery, events, tcp_manager=tcp, chat_state=chat_state)
     finally:
         discovery.stop()
         tcp.stop()

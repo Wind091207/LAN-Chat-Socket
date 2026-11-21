@@ -29,13 +29,13 @@ class TCPTransport:
         # peer_id -> {"sock": socket, "send_lock": threading.Lock(), "outgoing": bool}
         self._connections = {}
 
-    def _emit(self, event_type: str, **payload):
-        """Đẩy sự kiện bất đồng bộ sang Queue để CLI hiển thị an toàn."""
-        self.events.put({"type": event_type, **payload})
+    def _emit(self, event_type: str, data: dict):
+        """Đẩy tuple (event_type, data) sang Queue theo đúng format của cli.py."""
+        self.events.put((event_type, data))
 
     @staticmethod
     def _configure_socket(sock: socket.socket):
-        """Tối ưu độ trễ gói tin chat nhỏ."""
+        """Tắt Nagle để gửi tin nhắn chat ngay lập tức."""
         try:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         except OSError:
@@ -142,13 +142,8 @@ class TCPTransport:
                 sock.close()
                 return
 
-            # Nếu người dùng hiện tại chưa chọn ai để chat, tự động đặt người gọi làm đối tác
-            if self.chat_state.get_current_partner() is None:
-                self.chat_state.set_current_partner(peer_id)
-                self._emit("TCP_CONNECTED", peer_id=peer_id, name=peer_name, incoming=True)
-            else:
-                self._emit("TCP_INCOMING_PEER", peer_id=peer_id, name=peer_name)
-
+            # Giữ nguyên current_partner của CLI để khi có tin nhắn đến,
+            # CLI tự đếm unread và nhắc người dùng gõ /chat <name>
             self._receive_loop(peer_id, sock)
 
         except Exception:
@@ -195,23 +190,17 @@ class TCPTransport:
     # ------------------------------------------------------------------
     # 3. Chủ động kết nối, Gửi tin nhắn & Rời cuộc chat (API cho CLI)
     # ------------------------------------------------------------------
-    def connect_peer(self, peer) -> tuple | None:
+    def connect_peer(self, peer) -> tuple:
         """
         Mở hoặc tái sử dụng kết nối TCP tới peer.
-        Trả về peer_id = (ip, tcp_port) nếu thành công, None nếu thất bại.
+        Ném Exception nếu kết nối thất bại để cli.py bắt lỗi và thông báo.
         """
-        try:
-            peer_id, peer_name = self._extract_peer(peer)
-        except Exception as e:
-            self._emit("TCP_ERROR", message=f"Invalid peer info: {e}")
-            return None
-
+        peer_id, peer_name = self._extract_peer(peer)
         self.chat_state.set_peer_name(peer_id, peer_name)
 
-        # Kiểm tra kết nối đã tồn tại -> tái sử dụng ngay
+        # Tái sử dụng nếu kết nối tới peer này đã mở sẵn
         with self._conn_lock:
             if peer_id in self._connections:
-                self.chat_state.set_current_partner(peer_id)
                 return peer_id
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -221,31 +210,23 @@ class TCPTransport:
         try:
             sock.connect(peer_id)
 
-            # Chặn tự kết nối với chính mình
             if (sock.getsockname()[0], self.tcp_port) == peer_id:
-                sock.close()
-                self._emit("TCP_ERROR", message="Cannot chat with yourself.")
-                return None
+                raise ValueError("Cannot chat with yourself.")
 
             sock.sendall(encode_hi(self.name, self.tcp_port))
             reply = recv_frame(sock)
             sock.settimeout(None)
 
             if not reply or reply[0] != "HI":
-                sock.close()
-                self._emit("TCP_ERROR", message=f"Invalid handshake from {peer_name}")
-                return None
+                raise ConnectionError(f"Invalid handshake from {peer_name}")
 
             if not self._register_connection(peer_id, sock, outgoing=True):
                 sock.close()
-                # Nếu kết nối incoming vừa thắng tie-break thì vẫn tái sử dụng kết nối đó
                 with self._conn_lock:
                     if peer_id not in self._connections:
-                        return None
-                self.chat_state.set_current_partner(peer_id)
+                        raise ConnectionError(f"Connection to {peer_name} was closed")
                 return peer_id
 
-            self.chat_state.set_current_partner(peer_id)
             threading.Thread(
                 target=self._receive_loop,
                 args=(peer_id, sock),
@@ -254,27 +235,27 @@ class TCPTransport:
             ).start()
             return peer_id
 
-        except Exception as e:
+        except Exception:
             try:
                 sock.close()
             except OSError:
                 pass
-            self._emit("TCP_ERROR", message=f"Could not connect to {peer_name}: {e}")
-            return None
+            raise
 
     def send_message(self, peer_id: tuple | None, text: str) -> bool:
-        """Gửi tin nhắn UTF-8 tới peer_id (mặc định dùng current_partner nếu peer_id=None)."""
+        """
+        Gửi tin nhắn UTF-8 tới peer_id.
+        Ném ConnectionError/OSError nếu gửi thất bại để cli.py bắt lỗi.
+        """
         if peer_id is None:
             peer_id = self.chat_state.get_current_partner()
         if peer_id is None:
-            self._emit("TCP_ERROR", message="No active chat partner. Use /chat <name|number> first.")
-            return False
+            raise ConnectionError("No active chat partner.")
 
         with self._conn_lock:
             conn = self._connections.get(peer_id)
             if not conn:
-                self._emit("TCP_ERROR", message="Connection to peer is closed.")
-                return False
+                raise ConnectionError("Connection to peer is closed.")
             sock = conn["sock"]
             send_lock = conn["send_lock"]
 
@@ -282,24 +263,13 @@ class TCPTransport:
             frame = encode_msg(text)
             with send_lock:
                 sock.sendall(frame)
-
-            self.chat_state.add_message(
-                peer_id,
-                {
-                    "sender": self.name,
-                    "text": text,
-                    "is_me": True,
-                    "timestamp": time.time(),
-                },
-            )
             return True
-        except OSError as e:
-            self._emit("TCP_ERROR", message=f"Failed to send message: {e}")
+        except OSError:
             self._cleanup_connection(peer_id, sock)
-            return False
+            raise
 
     def leave_chat(self, peer_id: tuple | None = None) -> bool:
-        """Gửi BYE\n, đóng kết nối chat với peer_id và đưa current_partner về None."""
+        """Gửi BYE\n và đóng kết nối chat với peer_id."""
         if peer_id is None:
             peer_id = self.chat_state.get_current_partner()
         if peer_id is None:
@@ -334,13 +304,7 @@ class TCPTransport:
             while self._running:
                 frame = recv_frame(sock)
                 if frame is None:
-                    # Đối phương đóng terminal / crash (EOF)
-                    self._emit(
-                        "TCP_DISCONNECTED",
-                        peer_id=peer_id,
-                        name=peer_name,
-                        reason="connection closed",
-                    )
+                    self._emit("disconnected", {"peer_id": peer_id, "name": peer_name})
                     break
 
                 frame_type = frame[0]
@@ -355,18 +319,16 @@ class TCPTransport:
                             "timestamp": time.time(),
                         },
                     )
-                    if self.chat_state.get_current_partner() == peer_id:
-                        self._emit("TCP_MESSAGE", peer_id=peer_id, name=peer_name, text=text)
-                    else:
-                        unread = self.chat_state.get_unread_count(peer_id)
-                        self._emit("TCP_UNREAD", peer_id=peer_id, name=peer_name, count=unread)
+                    self._emit(
+                        "message",
+                        {"peer_id": peer_id, "name": peer_name, "text": text},
+                    )
 
                 elif frame_type == "BYE":
-                    self._emit("TCP_PEER_LEFT", peer_id=peer_id, name=peer_name)
+                    self._emit("peer_left", {"peer_id": peer_id, "name": peer_name})
                     break
 
                 elif frame_type == "HI":
-                    # Cập nhật lại tên nếu nhận gói HI bổ sung
                     self.chat_state.set_peer_name(peer_id, frame[1])
                     peer_name = frame[1]
 
@@ -374,14 +336,9 @@ class TCPTransport:
             with self._conn_lock:
                 is_active = self._connections.get(peer_id, {}).get("sock") is sock
             if self._running and is_active:
-                self._emit(
-                    "TCP_DISCONNECTED",
-                    peer_id=peer_id,
-                    name=peer_name,
-                    reason="connection lost",
-                )
-        except ValueError as e:
-            self._emit("TCP_ERROR", message=f"Protocol error from {peer_name}: {e}")
+                self._emit("disconnected", {"peer_id": peer_id, "name": peer_name})
+        except ValueError:
+            pass
         finally:
             self._cleanup_connection(peer_id, sock)
 
