@@ -248,12 +248,6 @@ def run_cli(registry, discovery, events, tcp_manager=None, chat_state=None):
                     print(f"Already chatting with {peer['name']}.")
                     continue
 
-                if old_partner_id is not None and tcp_manager:
-                    try:
-                        tcp_manager.leave_chat(old_partner_id)
-                    except Exception as exc:
-                        print(f"Warning while leaving previous chat: {exc}")
-
                 if tcp_manager:
                     try:
                         tcp_manager.connect_peer(peer)
