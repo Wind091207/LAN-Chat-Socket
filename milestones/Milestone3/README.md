@@ -1,152 +1,77 @@
-
-# Milestone 3 — TCP Chat
+# Milestone 3 — P2P TCP Chat, Message Framing & Quản lý đa kết nối
 
 ## 1. Mục tiêu
 
-Xây dựng chức năng chat P2P bằng TCP, kế thừa UDP Discovery và Peer Registry từ Milestone 2.
+Xây dựng tầng giao tiếp **TCP Peer-to-Peer (P2P)** tích hợp vào hệ thống LAN Chat từ Milestone 2, cho phép các peer thiết lập kết nối trực tiếp, trao đổi tin nhắn văn bản tiếng Việt (UTF-8) ổn định theo giao thức đóng khung tự định nghĩa (Message Framing), hỗ trợ trò chuyện đồng thời với nhiều peer và xử lý an toàn các tình huống ngắt kết nối hoặc dữ liệu lỗi.
 
-- `/chat <name|number>`: Chọn peer để chat.
-- Nhập văn bản thông thường để gửi tin nhắn.
-- `/leave`: Kết thúc cuộc chat hiện tại.
-- Gửi và nhận tin nhắn hai chiều.
-- Hỗ trợ nhiều peer, lịch sử chat và số tin chưa đọc.
-- Sử dụng Message Framing để xử lý TCP Byte Stream.
+---
 
-**Checkpoint:** Hai máy chat TCP hai chiều thành công.
+## 2. Kiến trúc hệ thống & Cấu trúc mã nguồn (`src/`)
 
-## 2. Phân công nhiệm vụ
+Hệ thống vận hành theo mô hình đa luồng trên một tiến trình duy nhất (`main.py`):
 
-### A — CLI & Chat Interface
+| Tệp tin | Vai trò | Chức năng chính |
+|---|---|---|
+| `main.py` | Điểm khởi chạy | Khởi tạo `Queue`, `PeerRegistry`, `ChatState`, `UDPDiscovery`, `TCPTransport` và gọi `run_cli` |
+| `protocol.py` | Đóng khung bản tin | Mã hóa/giải mã các frame `HI`, `MSG`, `BYE`; đọc đúng số byte theo header để chống dính gói và phân mảnh TCP |
+| `tcp_transport.py` | Giao vận TCP P2P | Mở TCP Server (`Acceptor`), chủ động kết nối (`connect_peer`), tạo luồng nhận riêng cho từng peer, phá vỡ xung đột kết nối đồng thời |
+| `chat_state.py` | Trạng thái hội thoại | Lưu lịch sử tin nhắn, tên peer, đối tác đang mở và bộ đếm `unread` an toàn đa luồng bằng `threading.RLock` |
+| `cli.py` | Giao diện dòng lệnh | Xử lý `/chat`, `/leave`, `/list`, hiển thị màu sắc, mốc giờ `[HH:MM]`, giữ kết nối ngầm khi chuyển phòng và vẽ lại dấu nhắc khi có tin đến |
+| `udp_discovery.py` | Khám phá peer (M2) | Phát và lắng nghe gói `HELLO` qua UDP broadcast cổng `9999` |
+| `peer_registry.py` | Danh bạ peer (M2) | Quản lý danh sách peer online/away và theo dõi timeout 10 giây |
 
-**File:** `src/cli.py`
+---
 
-- Bổ sung `/chat <name|number>` và `/leave`.
-- Xử lý văn bản không bắt đầu bằng `/` thành tin nhắn.
-- Hiển thị tin nhắn và thông báo tin chưa đọc.
-- Giữ nguyên `/list`, `/status`, `/help`, `/quit` của M2.
-- Gọi API TCP do B cung cấp.
-- Cập nhật `/help` và kiểm thử các lệnh CLI.
+## 3. Thiết kế giao thức ứng dụng (TCP Framing)
 
-### B — TCP Networking, Protocol & Integration
+### 3.1. Định dạng khung bản tin
 
-**File:** `src/tcp_transport.py`, `src/protocol.py`, `src/chat_state.py`, `src/main.py`
+Vì TCP truyền dữ liệu dưới dạng **dòng byte liên tục (byte stream)** không có ranh giới gói tin tự nhiên, nhóm thiết kế 3 loại khung bản tin kết thúc hoặc xác định độ dài tường minh:
 
-- Tạo TCP Server bằng `socket()`, `bind()`, `listen()`.
-- Tạo Acceptor Thread và Receiver Thread cho từng kết nối.
-- Kết nối peer bằng `connect()`.
-- Gửi/nhận bằng `sendall()` và `recv()`.
-- Xây dựng giao thức HI / MSG / BYE.
-- Xử lý Message Framing và đọc đủ byte.
-- Quản lý kết nối, lịch sử chat, đối tác hiện tại, unread.
-- Dùng Lock bảo vệ dữ liệu dùng chung.
-- Tích hợp TCP Chat vào `main.py`.
-- Kiểm thử tích hợp cùng A.
+- **Bắt tay định danh:**
+  ```text
+  HI|<name>|<tcp_port>\n
+  ```
+- **Gửi tin nhắn văn bản UTF-8:**
+  ```text
+  MSG|<byte_length>\n<UTF-8 payload>
+  ```
+  Trong đó `<byte_length>` là **số byte sau khi mã hóa UTF-8** (`len(text.encode("utf-8"))`), đảm bảo xử lý chính xác các ký tự tiếng Việt có dấu (2–3 byte/ký tự).
+- **Kết thúc phiên chat:**
+  ```text
+  BYE\n
+  ```
 
-### C — Chuẩn bị Milestone 4
+### 3.2. Cơ chế đọc 2 pha (`recv_frame`)
 
-- Chưa giao module phát triển mới trong M3.
-- Nghiên cứu File Transfer bằng TCP.
-- Tìm hiểu chunking, file nhị phân, progress và checksum.
-- Đọc giao thức và API của B để chuẩn bị tích hợp ở M4.
+1. **Pha 1 (`_recv_line`):** Đọc từng byte cho tới khi gặp ký tự `\n` để tách header (giới hạn `MAX_HEADER_LEN = 1024` byte nhằm chặn kết nối rác gửi chuỗi dài không có ký tự xuống dòng). Không dùng `makefile().readline()` để tránh đọc lố sang phần payload phía sau.
+2. **Pha 2 (`_recv_exact`):** Lấy giá trị `<byte_length>` từ header `MSG`, lặp gọi `sock.recv()` cho tới khi gom đủ chính xác `<byte_length>` byte rồi mới giải mã UTF-8. Cơ chế này giải quyết triệt để cả **dính gói (sticky packets)** lẫn **phân mảnh gói tin (TCP fragmentation)**.
 
-## 3. Quy ước thống nhất
+### 3.3. Xử lý xung đột khi hai peer `/chat` đồng thời
 
-### Định danh peer
+Mỗi peer được định danh duy nhất bằng khóa `peer_id = (ip, tcp_port)`. Nếu hai peer A và B cùng gọi `/chat` tới nhau tại một thời điểm, sau khi trao đổi gói `HI`, cả hai áp dụng quy tắc đối xứng: **bên có tuple `(ip, tcp_port)` nhỏ hơn giữ lại kết nối chủ động (`outgoing`), bên còn lại đóng socket thừa**. Nhờ đó mỗi cặp peer luôn duy trì tối đa **1 kết nối TCP**.
 
-- `peer_id = (ip, tcp_port)`.
-- Không dùng nickname làm định danh duy nhất.
-- TCP port lấy từ thông tin HELLO ở M2.
-- Mỗi peer vừa là TCP Client vừa là TCP Server.
+---
 
-### Giao thức TCP
+## 4. Các vấn đề thực tế đã gặp & Cách khắc phục
 
-Sử dụng header kết thúc bằng `\n`:
+| Vấn đề gặp phải | Nguyên nhân kỹ thuật | Giải pháp đã áp dụng |
+|---|---|---|
+| Sai lệch độ dài khung tin tiếng Việt | Tiếng Việt có dấu chiếm 2–3 byte/ký tự trong UTF-8 (ví dụ `"Hi bờ rồ Minh"` dài 13 ký tự nhưng chiếm **17 byte** — hiển thị `MSG\|17` trên Wireshark). Dùng `len(text)` gây thiếu byte cuối. | Tính `<byte_length>` theo `len(text.encode("utf-8"))` và dùng vòng lặp `_recv_exact` gom đủ chính xác số byte. |
+| Đóng ngang kết nối cũ khi chuyển phòng `/chat` | Bản `cli.py` ban đầu tự gọi `leave_chat` với đối tác cũ mỗi khi người dùng `/chat` sang người mới, làm mất kết nối nền và không nhận được thông báo `unread`. | Giữ nguyên các socket TCP đang mở khi chuyển phòng trên CLI, chỉ gửi `BYE` khi người dùng chủ động gõ `/leave` hoặc `/quit`. |
+| Lỗi `timed out` khi Ubuntu kết nối sang Windows | Windows Defender Firewall mặc định chặn kết nối TCP Inbound trên card mạng VirtualBox Host-Only (`Public` profile). | Thêm rule Firewall cho phép luồng Inbound trên cổng TCP `5000-5010` và UDP `9999`. |
+| Chồng lấn dòng nhập liệu khi có thông báo bất đồng bộ | Các luồng nền in thông báo `is online` / tin nhắn đến làm mất dấu nhắc nhập liệu trên console. | Dùng mã điều khiển ANSI (`\r\033[2K`) xóa dòng hiện tại, in sự kiện mới và tự động vẽ lại dấu nhắc `You -> <Tên>>`. |
 
-- `HI|<name>|<tcp_port>\n`
-- `MSG|<length>\n<UTF-8 bytes>`
-- `BYE\n`
+---
 
-Trong đó:
+## 5. Hạn chế kỹ thuật hiện tại & Hướng mở rộng
 
-- `HI`: Nhận diện peer.
-- `MSG`: Gửi tin nhắn.
-- `BYE`: Kết thúc chat.
-- `length` tính theo byte UTF-8, không phải số ký tự.
+1. **Chưa mã hóa đường truyền & xác thực (Plaintext):** Dữ liệu trao đổi qua TCP ở dạng văn bản rõ (có thể đọc trực tiếp qua tính năng *Follow TCP Stream* của Wireshark) và chưa có cơ chế xác thực danh tính peer. *Hướng mở rộng:* Bọc socket bằng `ssl.SSLContext` (TLS) và thêm bước xác thực token/chữ ký.
+2. **Phụ thuộc phạm vi mạng LAN & Tường lửa:** Cơ chế UDP Broadcast chỉ hoạt động trong cùng một subnet và dễ bị chặn bởi tính năng *Client Isolation* trên Wi-Fi công cộng hoặc Firewall của hệ điều hành. *Hướng mở rộng:* Bổ sung cơ chế nhập trực tiếp IP:Port thủ công hoặc máy chủ Rendezvous/Relay khi khác mạng con.
+3. **Lưu trữ tạm thời trên RAM (In-memory):** Lịch sử trò chuyện và bộ đếm `unread` chỉ tồn tại trong bộ nhớ trong suốt phiên chạy; khi người dùng thoát chương trình (`/quit`) toàn bộ lịch sử phiên cũ sẽ mất. *Hướng mở rộng:* Lưu lịch sử tin nhắn cục bộ ra tệp JSON hoặc SQLite theo từng `peer_id`.
+4. **Hạn chế hiển thị khi đang nhập liệu dở dang (CLI Buffer) & Độ trễ `offline` UDP:** 
+   - Vì CLI dùng hàm `input()` chặn (blocking) của Python kết hợp mã ANSI (`\r\033[2K`) để xóa và vẽ lại dấu nhắc khi có luồng nền in thông báo, nếu người dùng **đang gõ dở một câu (chưa nhấn `Enter`)** mà đối phương gửi tin nhắn tới, phần văn bản đang nhập bị xóa khỏi màn hình hiển thị (dù vẫn tồn tại trong bộ đệm nhập). *Hướng mở rộng (Milestone 4):* Thay thế `input()` bằng thư viện `prompt_toolkit` (`PromptSession` + `patch_stdout`) hoặc xử lý nhập từng phím (`msvcrt`/`termios`) để giữ nguyên chuỗi đang gõ dở trên màn hình.
+   - Ngoài ra, khi một peer tắt ngang không qua `/quit`, tầng TCP phát hiện ngắt kết nối ngay lập tức, nhưng trạng thái `offline` trên `/list` phụ thuộc chu kỳ timeout 10 giây của gói UDP `HELLO`.
+5. **Chưa tích hợp truyền tập tin (File Transfer):** Giao thức ở Milestone 3 mới hỗ trợ tin nhắn văn bản UTF-8 (`MSG`); tính năng chia nhỏ tệp tin (chunking) và kiểm tra toàn vẹn (checksum) sẽ được hoàn thiện ở **Milestone 4**.
 
-Bên nhận phải đọc đủ header và payload, không giả định một lần `recv()` nhận đủ thông điệp.
-
-### Quản lý kết nối
-
-- Mỗi cặp peer ưu tiên một kết nối chat.
-- Kết nối đang hoạt động được tái sử dụng.
-- Khi hai peer đồng thời kết nối, dùng thứ tự `(ip, tcp_port)` để quyết định giữ một kết nối.
-- `/leave` gửi BYE và đóng kết nối chat hiện tại.
-- `/quit` dừng TCP và UDP.
-- Tin từ peer khác được lưu vào lịch sử và tăng unread.
-- Khi chuyển sang peer đó, hiển thị tin chưa đọc và đặt unread về 0.
-
-### Thread, Queue và Lock
-
-- Main Thread: Nhận lệnh người dùng.
-- TCP Acceptor Thread: Chờ kết nối mới.
-- TCP Receiver Thread: Nhận dữ liệu từ từng kết nối.
-- Queue: Chuyển sự kiện TCP sang CLI.
-- Lock: Bảo vệ kết nối, lịch sử chat, unread và thao tác gửi chung socket.
-
-## 4. API cần thống nhất
-
-**B cung cấp cho A:**
-
-- `start()`
-- `connect_peer(peer)`
-- `send_message(peer_id, text)`
-- `leave_chat(peer_id)`
-- `stop()`
-
-**Protocol:**
-
-- `encode_hi(name, tcp_port)`
-- `encode_msg(text)`
-- `encode_bye()`
-- `recv_frame(sock)`
-
-**Chat State:**
-
-- `set_current_partner(peer_id)`
-- `add_message(peer_id, message)`
-- `get_history(peer_id)`
-- `get_unread_count(peer_id)`
-- `mark_as_read(peer_id)`
-
-Tên hàm là quy ước thiết kế. Nếu thay đổi phải cập nhật thống nhất giữa các module.
-
-## 5. Kiểm thử
-
-- [ ] Hai máy kết nối TCP thành công.
-- [ ] Chat hai chiều liên tục.
-- [ ] `/chat`, `/leave` hoạt động.
-- [ ] Gửi tiếng Việt UTF-8 chính xác.
-- [ ] Tin dài và frame bị chia nhỏ vẫn đọc đủ.
-- [ ] Nhiều tin liên tiếp không bị dính.
-- [ ] Ba peer, lịch sử và unread hoạt động.
-- [ ] Hai bên đồng thời `/chat` không tạo kết nối trùng.
-- [ ] Đóng kết nối và kết nối lại thành công.
-
-## 6. Minh chứng và báo cáo
-
-- [ ] Ảnh hai Terminal chat hai chiều.
-- [ ] Ảnh chat nhiều peer và unread.
-- [ ] Wireshark TCP SYN / SYN-ACK / ACK.
-- [ ] Ảnh TCP Stream và nội dung tin nhắn.
-- [ ] Sơ đồ TCP Acceptor / Receiver Threads.
-- [ ] Bảng kiểm thử PASS/FAIL.
-
-**Nội dung cần giải thích:**
-
-- Vì sao sử dụng TCP cho Chat.
-- Vì sao TCP cần Message Framing.
-- Cách quản lý nhiều kết nối.
-- Thread, Queue, Lock và Chat State.
-- Các lỗi thực tế và cách khắc phục.
-
-**Không triển khai trong M3:** File Transfer và Console Redraw hoàn chỉnh.
+---
