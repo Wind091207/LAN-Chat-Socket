@@ -73,7 +73,3 @@ Mỗi peer được định danh duy nhất bằng khóa `peer_id = (ip, tcp_por
 5. **Chưa tích hợp truyền tập tin (File Transfer):** Giao thức ở Milestone 3 mới hỗ trợ tin nhắn văn bản UTF-8 (`MSG`); tính năng chia nhỏ tệp tin (chunking) và kiểm tra toàn vẹn (checksum) sẽ được hoàn thiện ở **Milestone 4**.
 
 ---
-
-## 6. Minh chứng kiểm thử
-
-Toàn bộ kết quả kiểm thử chi tiết và ảnh chụp màn hình (chat tiếng Việt dài, đa peer 3 người + `unread`, xử lý crash & gói rác `nc`, bắt tay 3 bước TCP và `Follow TCP Stream` trên Wireshark) được lưu trong thư mục `milestones/Milestone3/` kèm tài liệu `HUONG_DAN_CHAY_M3.md`.
