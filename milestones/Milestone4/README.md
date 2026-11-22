@@ -221,7 +221,7 @@ def run_cli(
   `("file_error", {"filename": str, "error": str})`
 
 ---
-## 5. Danh sách kiểm thử (Test Cases)
+## 4. Danh sách kiểm thử (Test Cases)
 
 - [ ] Gửi file văn bản `.txt` thành công, mở đọc bình thường.
 - [ ] Gửi file nhị phân (`.pdf`, `.png`/`.jpg` hoặc `.zip` vài MB) thành công.
@@ -236,7 +236,7 @@ def run_cli(
 
 ---
 
-## 6. Minh chứng ảnh & Nội dung chuẩn bị cho báo cáo
+## 5. Minh chứng ảnh & Nội dung chuẩn bị cho báo cáo
 
 - [ ] Ảnh màn hình bên gửi hiển thị lệnh `/send` và các mốc tiến độ truyền file.
 - [ ] Ảnh màn hình bên nhận thông báo nhận file thành công và danh sách file trong thư mục `downloads/`.
