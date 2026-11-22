@@ -20,7 +20,7 @@ DIM = "\033[2m"
 CYAN = "\033[96m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
-BLUE = "\033[94m"
+BLUE = "\033[95m"
 GRAY = "\033[90m"
 
 HELP = (
