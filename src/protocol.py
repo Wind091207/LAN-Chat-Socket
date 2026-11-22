@@ -1,4 +1,7 @@
 import socket
+import os
+
+MAX_FILE_SIZE = 1024 * 1024 * 1024 # dùng cho file
 
 MAX_HEADER_LEN = 1024  # Chặn header rác quá dài không có ký tự '\n'
 
@@ -90,3 +93,62 @@ def recv_frame(sock: socket.socket) -> tuple | None:
         return ("BYE",)
 
     raise ValueError(f"Unknown frame type: {frame_type!r}")
+
+#Hàm cho file
+class ProtocolError(Exception):
+    pass
+
+def validate_safe_filename(filename: str) -> str:
+    if not filename or "\n" in filename or "\r" in filename or "|" in filename:
+        raise ProtocolError("Invalid filename characters")
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise ProtocolError("Path traversal is not allowed")
+    base = os.path.basename(filename)
+    if base != filename or base in (".", ".."):
+        raise ProtocolError("Filename must not contain directory paths")
+    return base
+
+
+def encode_file_header(sender_name: str, filename: str, size: int) -> bytes:
+    if not sender_name or "|" in sender_name or "\n" in sender_name or "\r" in sender_name:
+        raise ProtocolError("Invalid sender name")
+    safe_name = validate_safe_filename(filename)
+    if not isinstance(size, int) or isinstance(size, bool) or size < 0 or size > MAX_FILE_SIZE:
+        raise ProtocolError("Invalid file size")
+    header = f"FILE|{sender_name}|{safe_name}|{size}\n"
+    return header.encode("utf-8")
+
+
+def parse_file_header(line: str) -> dict:
+    clean = line.rstrip("\r\n")
+    parts = clean.split("|")
+    if len(parts) != 4 or parts[0] != "FILE":
+        raise ProtocolError("Malformed FILE header")
+    sender_name = parts[1].strip()
+    if not sender_name:
+        raise ProtocolError("Empty sender name")
+    safe_name = validate_safe_filename(parts[2])
+    try:
+        size = int(parts[3])
+    except ValueError as exc:
+        raise ProtocolError("Invalid file size") from exc
+    if size < 0 or size > MAX_FILE_SIZE:
+        raise ProtocolError("File size out of bounds")
+    return {
+        "type": "FILE",
+        "sender_name": sender_name,
+        "filename": safe_name,
+        "size": size,
+    }
+
+
+def encode_file_ok() -> bytes:
+    return b"FILE_OK\n"
+
+
+def is_file_ok(line: str) -> bool:
+    return line.rstrip("\r\n") == "FILE_OK"
+
+
+def recv_header_line(sock) -> str:
+    return _recv_line(sock)

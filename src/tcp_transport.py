@@ -4,11 +4,19 @@ import threading
 import time
 
 from chat_state import ChatState
-from protocol import encode_bye, encode_hi, encode_msg, recv_frame
+from protocol import (
+    MAX_HEADER_LEN,
+    ProtocolError,
+    encode_bye,
+    encode_hi,
+    encode_msg,
+    parse_file_header,
+    recv_frame,
+)
 
 
 class TCPTransport:
-    """Tầng giao vận P2P TCP: Server lắng nghe, Client kết nối và quản lý đa luồng."""
+    """Tầng giao vận P2P TCP: Server lắng nghe, định tuyến Chat/File và quản lý đa luồng."""
 
     def __init__(
         self,
@@ -16,11 +24,13 @@ class TCPTransport:
         tcp_port: int,
         chat_state: ChatState = None,
         events: queue.Queue = None,
+        file_receiver=None,
     ):
         self.name = name
         self.tcp_port = int(tcp_port)
         self.chat_state = chat_state if chat_state is not None else ChatState()
         self.events = events if events is not None else queue.Queue()
+        self.file_receiver = file_receiver
 
         self._server_sock = None
         self._running = False
@@ -29,13 +39,17 @@ class TCPTransport:
         # peer_id -> {"sock": socket, "send_lock": threading.Lock(), "outgoing": bool}
         self._connections = {}
 
+    def set_file_receiver(self, file_receiver):
+        """Gắn callback receive_file(sock, metadata) từ module C."""
+        self.file_receiver = file_receiver
+
     def _emit(self, event_type: str, data: dict):
         """Đẩy tuple (event_type, data) sang Queue theo đúng format của cli.py."""
         self.events.put((event_type, data))
 
     @staticmethod
     def _configure_socket(sock: socket.socket):
-        """Tắt Nagle để gửi tin nhắn chat ngay lập tức."""
+        """Tắt Nagle để gửi tin nhắn chat và header ngay lập tức."""
         try:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         except OSError:
@@ -57,6 +71,20 @@ class TCPTransport:
             peer_name = getattr(peer, "name", f"{ip}:{port}")
         return (ip, port), peer_name
 
+    @staticmethod
+    def _read_header_line(sock: socket.socket) -> str:
+        """Đọc đúng 1 dòng header kết thúc bằng \\n mà không đọc lố sang payload."""
+        buf = bytearray()
+        while True:
+            chunk = sock.recv(1)
+            if not chunk:
+                return ""
+            buf.extend(chunk)
+            if len(buf) > MAX_HEADER_LEN:
+                raise ProtocolError("Header line exceeds maximum length")
+            if chunk == b"\n":
+                return buf.decode("utf-8")
+
     # ------------------------------------------------------------------
     # 1. Khởi động & Dừng TCP Server
     # ------------------------------------------------------------------
@@ -77,7 +105,7 @@ class TCPTransport:
         ).start()
 
     def stop(self):
-        """Gửi BYE tới tất cả kết nối đang mở và đóng toàn bộ socket TCP."""
+        """Gửi BYE tới tất cả kết nối chat đang mở và đóng toàn bộ socket TCP."""
         self._running = False
         if self._server_sock:
             try:
@@ -105,7 +133,7 @@ class TCPTransport:
         self.chat_state.set_current_partner(None)
 
     # ------------------------------------------------------------------
-    # 2. Chấp nhận kết nối đến (Acceptor & Handshake)
+    # 2. Chấp nhận kết nối đến & Định tuyến Chat / File
     # ------------------------------------------------------------------
     def _accept_loop(self):
         while self._running:
@@ -121,17 +149,48 @@ class TCPTransport:
                 break
 
     def _handle_incoming(self, sock: socket.socket, addr: tuple):
+        """Đọc dòng header đầu tiên để phân loại kết nối FILE (M4) hoặc HI (M3)."""
         remote_ip = addr[0]
         try:
             sock.settimeout(5.0)
-            first_frame = recv_frame(sock)
-            sock.settimeout(None)
-
-            if not first_frame or first_frame[0] != "HI":
+            first_line = self._read_header_line(sock)
+            if not first_line:
                 sock.close()
                 return
 
-            _, peer_name, peer_tcp_port = first_frame
+            # Nhánh 1: Kết nối truyền file riêng biệt -> bàn giao socket cho C
+            if first_line.startswith("FILE|"):
+                metadata = parse_file_header(first_line)
+                metadata["sender_ip"] = remote_ip
+
+                if self.file_receiver is None:
+                    sock.close()
+                    return
+
+                sock.settimeout(30.0)
+                try:
+                    self.file_receiver(sock, metadata)
+                finally:
+                    try:
+                        sock.close()
+                    except OSError:
+                        pass
+                return
+
+            # Nhánh 2: Kết nối chat P2P (HI|<name>|<tcp_port>)
+            clean = first_line.rstrip("\r\n")
+            parts = clean.split("|")
+            if len(parts) != 3 or parts[0] != "HI":
+                sock.close()
+                return
+
+            peer_name = parts[1].strip()
+            peer_tcp_port = int(parts[2])
+            if not peer_name or not (1 <= peer_tcp_port <= 65535):
+                sock.close()
+                return
+
+            sock.settimeout(None)
             peer_id = (remote_ip, peer_tcp_port)
             self.chat_state.set_peer_name(peer_id, peer_name)
 
@@ -142,10 +201,13 @@ class TCPTransport:
                 sock.close()
                 return
 
-            # Giữ nguyên current_partner của CLI để khi có tin nhắn đến,
-            # CLI tự đếm unread và nhắc người dùng gõ /chat <name>
             self._receive_loop(peer_id, sock)
 
+        except (ProtocolError, ValueError, UnicodeDecodeError, OSError):
+            try:
+                sock.close()
+            except OSError:
+                pass
         except Exception:
             try:
                 sock.close()
@@ -154,9 +216,8 @@ class TCPTransport:
 
     def _register_connection(self, peer_id: tuple, new_sock: socket.socket, outgoing: bool) -> bool:
         """
-        Đảm bảo mỗi cặp peer chỉ giữ 1 kết nối TCP duy nhất.
-        Nếu hai bên connect() đồng thời, dùng thứ tự tuple (ip, tcp_port) để quyết định:
-        bên có (ip, tcp_port) nhỏ hơn giữ kết nối outgoing (chủ động mở).
+        Đảm bảo mỗi cặp peer chỉ giữ 1 kết nối TCP chat duy nhất.
+        Nếu hai bên connect() đồng thời, bên có tuple (ip, tcp_port) nhỏ hơn giữ kết nối outgoing.
         """
         with self._conn_lock:
             existing = self._connections.get(peer_id)
@@ -188,17 +249,33 @@ class TCPTransport:
             return False
 
     # ------------------------------------------------------------------
-    # 3. Chủ động kết nối, Gửi tin nhắn & Rời cuộc chat (API cho CLI)
+    # 3. API kết nối Chat, Mở socket File & Rời cuộc chat
     # ------------------------------------------------------------------
+    def open_file_socket(self, peer, timeout: float = 10.0) -> tuple[socket.socket, tuple[str, int], str]:
+        """Helper hỗ trợ module C mở một kết nối TCP riêng để gửi file."""
+        peer_id, peer_name = self._extract_peer(peer)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        try:
+            sock.connect(peer_id)
+            if (sock.getsockname()[0], self.tcp_port) == peer_id:
+                raise ValueError("Cannot send file to yourself.")
+            return sock, peer_id, peer_name
+        except Exception:
+            try:
+                sock.close()
+            except OSError:
+                pass
+            raise
+
     def connect_peer(self, peer) -> tuple:
         """
-        Mở hoặc tái sử dụng kết nối TCP tới peer.
+        Mở hoặc tái sử dụng kết nối TCP chat tới peer.
         Ném Exception nếu kết nối thất bại để cli.py bắt lỗi và thông báo.
         """
         peer_id, peer_name = self._extract_peer(peer)
         self.chat_state.set_peer_name(peer_id, peer_name)
 
-        # Tái sử dụng nếu kết nối tới peer này đã mở sẵn
         with self._conn_lock:
             if peer_id in self._connections:
                 return peer_id
@@ -243,10 +320,7 @@ class TCPTransport:
             raise
 
     def send_message(self, peer_id: tuple | None, text: str) -> bool:
-        """
-        Gửi tin nhắn UTF-8 tới peer_id.
-        Ném ConnectionError/OSError nếu gửi thất bại để cli.py bắt lỗi.
-        """
+        """Gửi tin nhắn UTF-8 tới peer_id qua kết nối chat."""
         if peer_id is None:
             peer_id = self.chat_state.get_current_partner()
         if peer_id is None:
@@ -269,7 +343,7 @@ class TCPTransport:
             raise
 
     def leave_chat(self, peer_id: tuple | None = None) -> bool:
-        """Gửi BYE\n và đóng kết nối chat với peer_id."""
+        """Gửi BYE\\n và đóng kết nối chat với peer_id."""
         if peer_id is None:
             peer_id = self.chat_state.get_current_partner()
         if peer_id is None:
@@ -296,7 +370,7 @@ class TCPTransport:
         return False
 
     # ------------------------------------------------------------------
-    # 4. Vòng lặp nhận dữ liệu cho từng peer (Receiver Thread)
+    # 4. Vòng lặp nhận dữ liệu Chat cho từng peer (Receiver Thread)
     # ------------------------------------------------------------------
     def _receive_loop(self, peer_id: tuple, sock: socket.socket):
         peer_name = self.chat_state.get_peer_name(peer_id)

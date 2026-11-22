@@ -1,6 +1,7 @@
-"""Milestone 3 app entry point: connect UDP Discovery, TCP Chat, and CLI modules."""
+"""Milestone 4 app entry point: connect UDP Discovery, TCP Chat, File Transfer, and CLI."""
 
 import argparse
+import inspect
 from queue import Queue
 
 from chat_state import ChatState
@@ -8,6 +9,16 @@ from cli import run_cli
 from peer_registry import PeerRegistry
 from tcp_transport import TCPTransport
 from udp_discovery import UDPDiscovery
+
+try:
+    from file_receiver import receive_file
+except ImportError:
+    receive_file = None
+
+try:
+    from file_transfer import send_file
+except ImportError:
+    send_file = None
 
 
 def tcp_port(value):
@@ -20,10 +31,42 @@ def tcp_port(value):
     return number
 
 
+def _bind_file_receiver(events):
+    if receive_file is None:
+        return None
+    params = inspect.signature(receive_file).parameters
+
+    def _receiver(sock, metadata):
+        kwargs = {}
+        if "events" in params:
+            kwargs["events"] = events
+        return receive_file(sock, metadata, **kwargs)
+
+    return _receiver
+
+
+def _bind_file_sender(sender_name, events, tcp_manager):
+    if send_file is None:
+        return None
+    params = inspect.signature(send_file).parameters
+
+    def _sender(peer_id, file_path):
+        kwargs = {}
+        if "sender_name" in params:
+            kwargs["sender_name"] = sender_name
+        if "events" in params:
+            kwargs["events"] = events
+        if "tcp_manager" in params:
+            kwargs["tcp_manager"] = tcp_manager
+        return send_file(peer_id, file_path, **kwargs)
+
+    return _sender
+
+
 def main():
-    parser = argparse.ArgumentParser(description="LAN Chat - Milestone 3")
+    parser = argparse.ArgumentParser(description="LAN Chat - Milestone 4")
     parser.add_argument("--name", required=True, help="Your nickname")
-    parser.add_argument("--tcp-port", type=tcp_port, required=True, help="TCP port for P2P chat")
+    parser.add_argument("--tcp-port", type=tcp_port, required=True, help="TCP port for P2P chat and file transfer")
     parser.add_argument("--bcast", default="255.255.255.255", help="UDP broadcast destination")
     args = parser.parse_args()
 
@@ -46,14 +89,25 @@ def main():
         tcp_port=args.tcp_port,
         chat_state=chat_state,
         events=events,
+        file_receiver=_bind_file_receiver(events),
     )
+
+    cli_params = inspect.signature(run_cli).parameters
+    cli_kwargs = {
+        "tcp_manager": tcp,
+        "chat_state": chat_state,
+    }
+    if "file_sender" in cli_params:
+        cli_kwargs["file_sender"] = _bind_file_sender(args.name, events, tcp)
+    if "sender_name" in cli_params:
+        cli_kwargs["sender_name"] = args.name
 
     try:
         tcp.start()
         registry.start_timeout_monitor()
         discovery.start()
         print(f"[*] {args.name}: listening TCP {args.tcp_port}, UDP broadcast 9999")
-        run_cli(registry, discovery, events, tcp_manager=tcp, chat_state=chat_state)
+        run_cli(registry, discovery, events, **cli_kwargs)
     finally:
         discovery.stop()
         tcp.stop()
