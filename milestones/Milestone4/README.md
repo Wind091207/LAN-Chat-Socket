@@ -138,7 +138,90 @@ percent = int(sent_bytes / total_bytes * 100)
 
 ---
 
-## 4. Danh sách kiểm thử (Test Cases)
+## 6. Hợp đồng API (Interface) đã chốt sẵn từ tầng B (`protocol.py`, `tcp_transport.py`, `main.py`)
+
+### 6.1. Các hàm B đã viết sẵn để C import và dùng trực tiếp
+
+**Từ `protocol.py`:**
+- `encode_file_header(sender_name: str, filename: str, size: int) -> bytes`
+  Tạo header `FILE|<sender_name>|<filename>|<size>\n` (đã tự kiểm tra tên file hợp lệ và chặn ký tự `|`, `..`, `/`, `\`).
+- `encode_file_ok() -> bytes`
+  Trả về `b"FILE_OK\n"` để C gửi xác nhận sau khi lưu file xong.
+- `recv_header_line(sock) -> str`
+  Đọc 1 dòng kết thúc bằng `\n` (dùng bên phía gửi để đọc phản hồi `FILE_OK\n` từ bên nhận).
+- `is_file_ok(line: str) -> bool`
+  Kiểm tra dòng phản hồi có đúng là `FILE_OK` hay không.
+- `validate_safe_filename(filename: str) -> str` & `ProtocolError`: Kiểm tra an toàn tên file.
+
+**Từ `tcp_transport.py` (qua đối tượng `tcp_manager`):**
+- `tcp_manager.open_file_socket(peer, timeout: float = 10.0) -> tuple[socket.socket, tuple[str, int], str]`
+  Mở sẵn một kết nối TCP riêng tới peer và trả về `(sock, peer_id, peer_name)` để C gửi header và chunk dữ liệu.
+
+---
+
+### 6.2. Chữ ký hàm (Signature) C cần viết để `main.py` tự động kết nối
+
+**Trong `file_transfer.py` (Bên gửi):**
+```python
+def send_file(
+    peer_id: tuple[str, int],
+    file_path: str,
+    sender_name: str = "",
+    events=None,
+    tcp_manager=None,
+):
+    ...
+```
+*(Lưu ý: `main.py` sẽ tự động truyền đủ `sender_name`, `events` Queue và `tcp_manager` vào hàm này nếu C khai báo các tham số trên; C chỉ cần tạo `Thread` gửi file bên trong và đẩy tiến độ vào `events`).*
+
+**Trong `file_receiver.py` (Bên nhận):**
+```python
+def receive_file(sock, metadata: dict, events=None):
+    ...
+```
+Trong đó `metadata` được B tách sẵn từ header `FILE|...` gồm đủ 5 trường:
+```python
+{
+    "type": "FILE",
+    "sender_name": str,   # Nickname người gửi
+    "filename": str,      # Tên file gốc đã lọc an toàn
+    "size": int,          # Dung lượng file (byte)
+    "sender_ip": str,     # Địa chỉ IP của máy gửi
+}
+```
+*(Sau khi `receive_file` chạy xong hoặc ném lỗi, `TCPTransport` sẽ tự động đóng `sock` trong khối `finally`).*
+
+---
+
+### 6.3. Chữ ký hàm & Format `events` Queue thống nhất giữa A và C
+
+**Trong `cli.py` (Thành viên A):**
+```python
+def run_cli(
+    registry,
+    discovery,
+    events,
+    tcp_manager=None,
+    chat_state=None,
+    file_sender=None,
+    sender_name: str = "",
+):
+    ...
+```
+- Khi người dùng gõ `/send <file_path>`, A kiểm tra `current_partner = chat_state.get_current_partner()`, sau đó gọi `file_sender(current_partner, file_path)`.
+
+**Format sự kiện C đẩy vào `events.put((event_type, data))` để A hiển thị lên UI:**
+- Tiến độ gửi file (mốc 25%, 50%, 75%, 100%):
+  `("file_progress", {"filename": str, "percent": int, "peer_name": str})`
+- Gửi file hoàn tất:
+  `("file_sent", {"filename": str, "size": int, "peer_name": str})`
+- Nhận file hoàn tất:
+  `("file_received", {"filename": str, "size": int, "sender_name": str, "saved_path": str})`
+- Lỗi truyền/nhận file:
+  `("file_error", {"filename": str, "error": str})`
+
+---
+## 5. Danh sách kiểm thử (Test Cases)
 
 - [ ] Gửi file văn bản `.txt` thành công, mở đọc bình thường.
 - [ ] Gửi file nhị phân (`.pdf`, `.png`/`.jpg` hoặc `.zip` vài MB) thành công.
@@ -153,7 +236,7 @@ percent = int(sent_bytes / total_bytes * 100)
 
 ---
 
-## 5. Minh chứng ảnh & Nội dung chuẩn bị cho báo cáo
+## 6. Minh chứng ảnh & Nội dung chuẩn bị cho báo cáo
 
 - [ ] Ảnh màn hình bên gửi hiển thị lệnh `/send` và các mốc tiến độ truyền file.
 - [ ] Ảnh màn hình bên nhận thông báo nhận file thành công và danh sách file trong thư mục `downloads/`.
