@@ -1,4 +1,4 @@
-"""Milestone 4 app entry point: connect UDP Discovery, TCP Chat, File Transfer, and CLI."""
+"""Khởi tạo và kết nối các module UDP Discovery, TCP Chat, File Transfer và CLI."""
 
 import argparse
 import inspect
@@ -22,6 +22,7 @@ except ImportError:
 
 
 def tcp_port(value):
+    """Kiểm tra tính hợp lệ của tham số cổng TCP (1-65535)."""
     try:
         number = int(value)
     except ValueError as exc:
@@ -32,6 +33,7 @@ def tcp_port(value):
 
 
 def _bind_file_receiver(events):
+    """Gắn hàng đợi events vào hàm nhận file của module C."""
     if receive_file is None:
         return None
     params = inspect.signature(receive_file).parameters
@@ -46,6 +48,7 @@ def _bind_file_receiver(events):
 
 
 def _bind_file_sender(sender_name, events, tcp_manager):
+    """Gắn ngữ cảnh phiên chạy vào hàm gửi file của module C."""
     if send_file is None:
         return None
     params = inspect.signature(send_file).parameters
@@ -64,6 +67,7 @@ def _bind_file_sender(sender_name, events, tcp_manager):
 
 
 def main():
+    """Điểm khởi chạy chính của ứng dụng LAN Chat."""
     parser = argparse.ArgumentParser(description="LAN Chat - Milestone 4")
     parser.add_argument("--name", required=True, help="Your nickname")
     parser.add_argument("--tcp-port", type=tcp_port, required=True, help="TCP port for P2P chat and file transfer")

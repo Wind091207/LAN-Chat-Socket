@@ -1,31 +1,36 @@
-import socket
+"""Định nghĩa giao thức đóng khung bản tin Chat (HI, MSG, BYE) và File (FILE, FILE_OK)."""
+
 import os
+import socket
 
-MAX_FILE_SIZE = 1024 * 1024 * 1024 # dùng cho file
+MAX_FILE_SIZE = 1024 * 1024 * 1024
+MAX_HEADER_LEN = 1024
 
-MAX_HEADER_LEN = 1024  # Chặn header rác quá dài không có ký tự '\n'
+
+class ProtocolError(Exception):
+    """Ngoại lệ khi dữ liệu vi phạm định dạng giao thức hoặc an toàn tên file."""
 
 
 def encode_hi(name: str, tcp_port: int) -> bytes:
-    """Đóng gói bản tin định danh đầu kết nối: HI|<name>|<tcp_port>\n"""
+    """Đóng gói bản tin định danh đầu kết nối HI."""
     clean_name = name.replace("|", "_").replace("\n", "").replace("\r", "")
     return f"HI|{clean_name}|{int(tcp_port)}\n".encode("utf-8")
 
 
 def encode_msg(text: str) -> bytes:
-    """Đóng gói tin nhắn chat: MSG|<byte_length>\n<UTF-8 bytes>"""
+    """Đóng gói tin nhắn văn bản UTF-8 kèm độ dài byte."""
     payload = text.encode("utf-8")
     header = f"MSG|{len(payload)}\n".encode("utf-8")
     return header + payload
 
 
 def encode_bye() -> bytes:
-    """Đóng gói bản tin kết thúc phiên chat: BYE\n"""
+    """Đóng gói bản tin kết thúc phiên chat BYE."""
     return b"BYE\n"
 
 
 def _recv_exact(sock: socket.socket, num_bytes: int) -> bytes:
-    """Đọc chính xác num_bytes từ TCP stream. Ném ConnectionError nếu đứt giữa chừng."""
+    """Đọc đủ chính xác num_bytes từ luồng TCP."""
     chunks = bytearray()
     while len(chunks) < num_bytes:
         chunk = sock.recv(num_bytes - len(chunks))
@@ -36,13 +41,13 @@ def _recv_exact(sock: socket.socket, num_bytes: int) -> bytes:
 
 
 def _recv_line(sock: socket.socket) -> str:
-    """Đọc từng byte cho tới dấu '\n' để lấy trọn vẹn dòng header."""
+    """Đọc từng byte cho tới ký tự xuống dòng để tách dòng header."""
     line = bytearray()
     while True:
         ch = sock.recv(1)
         if not ch:
             if not line:
-                return ""  # Đối phương đóng kết nối sạch sẽ (EOF)
+                return ""
             raise ConnectionError("Connection closed prematurely mid-header")
         if ch == b"\n":
             break
@@ -53,15 +58,7 @@ def _recv_line(sock: socket.socket) -> str:
 
 
 def recv_frame(sock: socket.socket) -> tuple | None:
-    """
-    Đọc và giải mã 1 frame từ socket.
-    Trả về:
-      - ("HI", name, tcp_port)
-      - ("MSG", text)
-      - ("BYE",)
-      - None nếu đối phương ngắt kết nối (EOF)
-    Ném ValueError nếu frame sai định dạng giao thức.
-    """
+    """Đọc và giải mã một khung bản tin chat (HI, MSG, BYE) từ socket."""
     header = _recv_line(sock)
     if header == "":
         return None
@@ -94,11 +91,9 @@ def recv_frame(sock: socket.socket) -> tuple | None:
 
     raise ValueError(f"Unknown frame type: {frame_type!r}")
 
-#Hàm cho file
-class ProtocolError(Exception):
-    pass
 
 def validate_safe_filename(filename: str) -> str:
+    """Kiểm tra tên file hợp lệ và ngăn chặn tấn công Path Traversal."""
     if not filename or "\n" in filename or "\r" in filename or "|" in filename:
         raise ProtocolError("Invalid filename characters")
     if "/" in filename or "\\" in filename or ".." in filename:
@@ -110,6 +105,7 @@ def validate_safe_filename(filename: str) -> str:
 
 
 def encode_file_header(sender_name: str, filename: str, size: int) -> bytes:
+    """Đóng gói header truyền file FILE|<sender_name>|<filename>|<size>."""
     if not sender_name or "|" in sender_name or "\n" in sender_name or "\r" in sender_name:
         raise ProtocolError("Invalid sender name")
     safe_name = validate_safe_filename(filename)
@@ -120,6 +116,7 @@ def encode_file_header(sender_name: str, filename: str, size: int) -> bytes:
 
 
 def parse_file_header(line: str) -> dict:
+    """Phân tích và xác thực dòng header FILE nhận được."""
     clean = line.rstrip("\r\n")
     parts = clean.split("|")
     if len(parts) != 4 or parts[0] != "FILE":
@@ -143,12 +140,15 @@ def parse_file_header(line: str) -> dict:
 
 
 def encode_file_ok() -> bytes:
+    """Đóng gói bản tin xác nhận đã lưu file thành công."""
     return b"FILE_OK\n"
 
 
 def is_file_ok(line: str) -> bool:
+    """Kiểm tra phản hồi từ bên nhận có phải FILE_OK hay không."""
     return line.rstrip("\r\n") == "FILE_OK"
 
 
 def recv_header_line(sock) -> str:
+    """Đọc một dòng header kết thúc bằng ký tự xuống dòng từ socket."""
     return _recv_line(sock)

@@ -1,3 +1,5 @@
+"""Tầng giao vận P2P TCP: lắng nghe kết nối, định tuyến Chat/File và quản lý đa luồng."""
+
 import queue
 import socket
 import threading
@@ -16,7 +18,7 @@ from protocol import (
 
 
 class TCPTransport:
-    """Tầng giao vận P2P TCP: Server lắng nghe, định tuyến Chat/File và quản lý đa luồng."""
+    """Quản lý TCP Server/Client cho tin nhắn P2P và định tuyến kết nối truyền file."""
 
     def __init__(
         self,
@@ -35,21 +37,19 @@ class TCPTransport:
         self._server_sock = None
         self._running = False
         self._conn_lock = threading.RLock()
-
-        # peer_id -> {"sock": socket, "send_lock": threading.Lock(), "outgoing": bool}
         self._connections = {}
 
     def set_file_receiver(self, file_receiver):
-        """Gắn callback receive_file(sock, metadata) từ module C."""
+        """Gắn hàm xử lý nhận file từ module C."""
         self.file_receiver = file_receiver
 
     def _emit(self, event_type: str, data: dict):
-        """Đẩy tuple (event_type, data) sang Queue theo đúng format của cli.py."""
+        """Đẩy sự kiện sang hàng đợi events cho CLI xử lý."""
         self.events.put((event_type, data))
 
     @staticmethod
     def _configure_socket(sock: socket.socket):
-        """Tắt Nagle để gửi tin nhắn chat và header ngay lập tức."""
+        """Bật TCP_NODELAY để gửi dữ liệu điều khiển và tin nhắn tức thời."""
         try:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         except OSError:
@@ -57,7 +57,7 @@ class TCPTransport:
 
     @staticmethod
     def _extract_peer(peer) -> tuple[tuple[str, int], str]:
-        """Chuẩn hóa thông tin peer (hỗ trợ dict, object hoặc tuple)."""
+        """Chuẩn hóa thông tin peer về dạng ((ip, port), name)."""
         if isinstance(peer, dict):
             ip = peer["ip"]
             port = int(peer["tcp_port"])
@@ -73,7 +73,7 @@ class TCPTransport:
 
     @staticmethod
     def _read_header_line(sock: socket.socket) -> str:
-        """Đọc đúng 1 dòng header kết thúc bằng \\n mà không đọc lố sang payload."""
+        """Đọc đúng một dòng header kết thúc bằng ký tự xuống dòng."""
         buf = bytearray()
         while True:
             chunk = sock.recv(1)
@@ -85,11 +85,8 @@ class TCPTransport:
             if chunk == b"\n":
                 return buf.decode("utf-8")
 
-    # ------------------------------------------------------------------
-    # 1. Khởi động & Dừng TCP Server
-    # ------------------------------------------------------------------
     def start(self):
-        """Mở socket TCP Server và chạy Acceptor Thread."""
+        """Mở socket TCP Server và khởi chạy luồng chấp nhận kết nối."""
         if self._running:
             return
         self._running = True
@@ -105,7 +102,7 @@ class TCPTransport:
         ).start()
 
     def stop(self):
-        """Gửi BYE tới tất cả kết nối chat đang mở và đóng toàn bộ socket TCP."""
+        """Gửi BYE tới các phiên chat đang mở và đóng toàn bộ socket TCP."""
         self._running = False
         if self._server_sock:
             try:
@@ -132,10 +129,8 @@ class TCPTransport:
 
         self.chat_state.set_current_partner(None)
 
-    # ------------------------------------------------------------------
-    # 2. Chấp nhận kết nối đến & Định tuyến Chat / File
-    # ------------------------------------------------------------------
     def _accept_loop(self):
+        """Chấp nhận các kết nối TCP đến và tạo luồng xử lý riêng."""
         while self._running:
             try:
                 client_sock, addr = self._server_sock.accept()
@@ -149,7 +144,7 @@ class TCPTransport:
                 break
 
     def _handle_incoming(self, sock: socket.socket, addr: tuple):
-        """Đọc dòng header đầu tiên để phân loại kết nối FILE (M4) hoặc HI (M3)."""
+        """Đọc dòng header đầu tiên để phân luồng kết nối FILE hoặc HI."""
         remote_ip = addr[0]
         try:
             sock.settimeout(5.0)
@@ -158,7 +153,6 @@ class TCPTransport:
                 sock.close()
                 return
 
-            # Nhánh 1: Kết nối truyền file riêng biệt -> bàn giao socket cho C
             if first_line.startswith("FILE|"):
                 metadata = parse_file_header(first_line)
                 metadata["sender_ip"] = remote_ip
@@ -177,7 +171,6 @@ class TCPTransport:
                         pass
                 return
 
-            # Nhánh 2: Kết nối chat P2P (HI|<name>|<tcp_port>)
             clean = first_line.rstrip("\r\n")
             parts = clean.split("|")
             if len(parts) != 3 or parts[0] != "HI":
@@ -194,7 +187,6 @@ class TCPTransport:
             peer_id = (remote_ip, peer_tcp_port)
             self.chat_state.set_peer_name(peer_id, peer_name)
 
-            # Phản hồi HI để xác nhận định danh hai chiều
             sock.sendall(encode_hi(self.name, self.tcp_port))
 
             if not self._register_connection(peer_id, sock, outgoing=False):
@@ -215,10 +207,7 @@ class TCPTransport:
                 pass
 
     def _register_connection(self, peer_id: tuple, new_sock: socket.socket, outgoing: bool) -> bool:
-        """
-        Đảm bảo mỗi cặp peer chỉ giữ 1 kết nối TCP chat duy nhất.
-        Nếu hai bên connect() đồng thời, bên có tuple (ip, tcp_port) nhỏ hơn giữ kết nối outgoing.
-        """
+        """Đăng ký kết nối chat và loại bỏ trùng lặp nếu hai peer kết nối đồng thời."""
         with self._conn_lock:
             existing = self._connections.get(peer_id)
             if existing is None:
@@ -231,7 +220,7 @@ class TCPTransport:
 
             local_ip = new_sock.getsockname()[0]
             my_id = (local_ip, self.tcp_port)
-            keep_outgoing = (my_id < peer_id)
+            keep_outgoing = my_id < peer_id
 
             if outgoing == keep_outgoing:
                 old_sock = existing["sock"]
@@ -248,11 +237,8 @@ class TCPTransport:
 
             return False
 
-    # ------------------------------------------------------------------
-    # 3. API kết nối Chat, Mở socket File & Rời cuộc chat
-    # ------------------------------------------------------------------
     def open_file_socket(self, peer, timeout: float = 10.0) -> tuple[socket.socket, tuple[str, int], str]:
-        """Helper hỗ trợ module C mở một kết nối TCP riêng để gửi file."""
+        """Mở một kết nối TCP độc lập tới peer phục vụ truyền file."""
         peer_id, peer_name = self._extract_peer(peer)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
@@ -269,10 +255,7 @@ class TCPTransport:
             raise
 
     def connect_peer(self, peer) -> tuple:
-        """
-        Mở hoặc tái sử dụng kết nối TCP chat tới peer.
-        Ném Exception nếu kết nối thất bại để cli.py bắt lỗi và thông báo.
-        """
+        """Mở hoặc tái sử dụng kết nối TCP chat tới peer."""
         peer_id, peer_name = self._extract_peer(peer)
         self.chat_state.set_peer_name(peer_id, peer_name)
 
@@ -320,7 +303,7 @@ class TCPTransport:
             raise
 
     def send_message(self, peer_id: tuple | None, text: str) -> bool:
-        """Gửi tin nhắn UTF-8 tới peer_id qua kết nối chat."""
+        """Gửi khung tin nhắn UTF-8 tới peer_id."""
         if peer_id is None:
             peer_id = self.chat_state.get_current_partner()
         if peer_id is None:
@@ -343,7 +326,7 @@ class TCPTransport:
             raise
 
     def leave_chat(self, peer_id: tuple | None = None) -> bool:
-        """Gửi BYE\\n và đóng kết nối chat với peer_id."""
+        """Gửi gói BYE và đóng kết nối chat với peer_id."""
         if peer_id is None:
             peer_id = self.chat_state.get_current_partner()
         if peer_id is None:
@@ -369,10 +352,8 @@ class TCPTransport:
             return True
         return False
 
-    # ------------------------------------------------------------------
-    # 4. Vòng lặp nhận dữ liệu Chat cho từng peer (Receiver Thread)
-    # ------------------------------------------------------------------
     def _receive_loop(self, peer_id: tuple, sock: socket.socket):
+        """Vòng lặp nhận các frame chat đến từ một peer."""
         peer_name = self.chat_state.get_peer_name(peer_id)
         try:
             while self._running:
@@ -417,6 +398,7 @@ class TCPTransport:
             self._cleanup_connection(peer_id, sock)
 
     def _cleanup_connection(self, peer_id: tuple, sock: socket.socket):
+        """Dọn dẹp socket và trạng thái khi kết nối với peer kết thúc."""
         removed = False
         with self._conn_lock:
             conn = self._connections.get(peer_id)

@@ -445,7 +445,7 @@ def run_cli(
                         except Exception as exc:
                             ui.show_line(f"Failed to connect to {peer['name']}: {exc}")
                             with state_lock:
-                                # state["partner_id"] = None
+                                state["partner_id"] = None
                                 state["partner_name"] = None
                             if chat_state:
                                 chat_state.set_current_partner(None)

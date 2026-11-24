@@ -1,3 +1,4 @@
+"""Quản lý danh sách peer trong mạng LAN, trạng thái hoạt động và timeout."""
 
 from __future__ import annotations
 
@@ -8,8 +9,9 @@ from queue import Queue
 from threading import Event, Lock, Thread
 from typing import Callable, Optional, TypedDict
 
-# Mô tả 5 trường của 1 peer
+
 class Peer(TypedDict):
+    """Cấu trúc dữ liệu lưu thông tin một peer."""
     name: str
     ip: str
     tcp_port: int
@@ -17,17 +19,19 @@ class Peer(TypedDict):
     last_seen: float
 
 
-class PeerRegistry: # Class quản lý danh sách peer bằng dict + Lock + Queue
-    def __init__( # Tạo Registry rỗng, đặt timeout 10 giây, Queue và Lock
+class PeerRegistry:
+    """Lưu trữ và theo dõi thời gian hoạt động của các peer an toàn đa luồng."""
+
+    def __init__(
         self,
-        events: Optional[Queue] = None, 
-        *, 
-        timeout_seconds: float = 10.0, 
-        check_interval: float = 1.0, 
-        clock: Optional[Callable[[], float]] = None, 
+        events: Optional[Queue] = None,
+        *,
+        timeout_seconds: float = 10.0,
+        check_interval: float = 1.0,
+        clock: Optional[Callable[[], float]] = None,
     ) -> None:
-        self._timeout = self._positive_number(timeout_seconds, "timeout_seconds") # Kiểm tra tham số thời gian phải là số dương
-        self._check_interval = self._positive_number(check_interval, "check_interval") # Kiểm tra tham số thời gian phải là số dương
+        self._timeout = self._positive_number(timeout_seconds, "timeout_seconds")
+        self._check_interval = self._positive_number(check_interval, "check_interval")
         if events is None:
             events = Queue()
         if type(events) is not Queue:
@@ -37,16 +41,17 @@ class PeerRegistry: # Class quản lý danh sách peer bằng dict + Lock + Queu
         if clock is not None and not callable(clock):
             raise TypeError("clock must be callable")
 
-        self.events = events # Hàng đợi các sự kiện vừa xảy ra để thông báo cho B, Queue lưu sự kiện dạng tuple có 2 phần tử: ("online", peer_dict)
+        self.events = events
         self._clock = time.monotonic if clock is None else clock
-        self._peers: dict[tuple[str, int], Peer] = {} # Danh sách các peer đang được phát hiện
-        self._lock = Lock() 
+        self._peers: dict[tuple[str, int], Peer] = {}
+        self._lock = Lock()
         self._monitor_lock = Lock()
         self._stop_event = Event()
         self._monitor_thread: Optional[Thread] = None
 
     @staticmethod
-    def _positive_number(value: float, label: str) -> float: # Kiểm tra tham số thời gian phải là số dương
+    def _positive_number(value: float, label: str) -> float:
+        """Kiểm tra tham số thời gian phải là số dương hữu hạn."""
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise TypeError(f"{label} must be a number")
         if not math.isfinite(value) or value <= 0:
@@ -54,7 +59,8 @@ class PeerRegistry: # Class quản lý danh sách peer bằng dict + Lock + Queu
         return float(value)
 
     @staticmethod
-    def _validate_peer(name: str, ip: str, tcp_port: int, status: str) -> str: # Kiểm tra name, IPv4, TCP port, status hợp lệ
+    def _validate_peer(name: str, ip: str, tcp_port: int, status: str) -> str:
+        """Kiểm tra tính hợp lệ của tên, địa chỉ IPv4, cổng TCP và trạng thái peer."""
         if not isinstance(name, str):
             raise TypeError("name must be a string")
         if not name.strip() or "|" in name or any(ord(c) < 32 or ord(c) == 127 for c in name):
@@ -74,9 +80,9 @@ class PeerRegistry: # Class quản lý danh sách peer bằng dict + Lock + Queu
         if status not in ("online", "away"):
             raise ValueError("status must be 'online' or 'away'")
         return normalized_ip
-    
-    # Thêm/cập nhật peer, làm mới last_seen; phát sự kiện khi mới hoặc đổi status
-    def update_peer(self, name: str, ip: str, tcp_port: int, status: str) -> Peer: 
+
+    def update_peer(self, name: str, ip: str, tcp_port: int, status: str) -> Peer:
+        """Thêm mới hoặc cập nhật peer và phát sự kiện khi online hoặc đổi trạng thái."""
         ip = self._validate_peer(name, ip, tcp_port, status)
         key = (ip, tcp_port)
         with self._lock:
@@ -90,16 +96,18 @@ class PeerRegistry: # Class quản lý danh sách peer bằng dict + Lock + Queu
             }
             self._peers[key] = peer
             if previous is None:
-                self.events.put_nowait(("online", peer.copy())) # Thêm event vào cuối queue
+                self.events.put_nowait(("online", peer.copy()))
             elif previous["status"] != status:
-                self.events.put_nowait(("status_changed", peer.copy())) # Thêm event vào cuối queue
+                self.events.put_nowait(("status_changed", peer.copy()))
             return peer.copy()
 
-    def get_peers(self) -> list[Peer]: # Trả về danh sách bản sao các peer cho B hiển thị /list
+    def get_peers(self) -> list[Peer]:
+        """Trả về danh sách bản sao các peer hiện có."""
         with self._lock:
             return [peer.copy() for peer in self._peers.values()]
 
-    def remove_expired_peers(self) -> list[Peer]: # Xóa peer quá 10 giây và phát sự kiện offline
+    def remove_expired_peers(self) -> list[Peer]:
+        """Xóa các peer quá thời gian chờ và phát sự kiện offline."""
         with self._lock:
             now = float(self._clock())
             expired_keys = [
@@ -113,7 +121,8 @@ class PeerRegistry: # Class quản lý danh sách peer bằng dict + Lock + Queu
                 removed.append(peer.copy())
             return removed
 
-    def start_timeout_monitor(self) -> None: # Khởi chạy thread quét timeout định kỳ
+    def start_timeout_monitor(self) -> None:
+        """Khởi chạy luồng nền kiểm tra peer hết hạn định kỳ."""
         with self._monitor_lock:
             if self._monitor_thread is not None and self._monitor_thread.is_alive():
                 return
@@ -126,15 +135,15 @@ class PeerRegistry: # Class quản lý danh sách peer bằng dict + Lock + Queu
             self._monitor_thread = thread
             thread.start()
 
-    def stop_timeout_monitor(self) -> None: # Yêu cầu thread timeout dừng và chờ nó kết thúc
+    def stop_timeout_monitor(self) -> None:
+        """Dừng luồng kiểm tra peer hết hạn."""
         with self._monitor_lock:
             self._stop_event.set()
             if self._monitor_thread is not None:
                 self._monitor_thread.join()
                 self._monitor_thread = None
 
-    def _monitor_loop(self) -> None: # Mỗi ~1 giây gọi remove_expired_peers()
+    def _monitor_loop(self) -> None:
+        """Vòng lặp quét và loại bỏ peer quá hạn."""
         while not self._stop_event.wait(self._check_interval):
             self.remove_expired_peers()
-
-# Queue lưu các sự kiện về trạng thái peer, không phải lưu danh sách peer

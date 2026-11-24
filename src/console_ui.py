@@ -1,4 +1,4 @@
-"""Milestone 4 Console UI helper using prompt_toolkit (A's module)."""
+"""Thread-safe Console UI wrapper supporting prompt_toolkit input preservation."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ RED = "\033[91m"
 
 
 class ConsoleUI:
-    """Thread-safe console UI wrapper with prompt_toolkit redraw support."""
+    """Synchronize terminal output and keep active user input intact across threads."""
 
     def __init__(self, use_prompt_toolkit: bool | None = None):
         self._print_lock = threading.Lock()
@@ -46,25 +46,25 @@ class ConsoleUI:
         return self._use_ptk and self._session is not None
 
     def set_prompt(self, prompt_text: str) -> None:
-        """Remember the active prompt string for fallback redraws."""
+        """Store the active prompt string for fallback redraws."""
         with self._prompt_lock:
             self._current_prompt = prompt_text
 
     def stdout_context(self):
-        """Return patch_stdout(raw=True) context manager when prompt_toolkit is active."""
+        """Return patch_stdout context manager when prompt_toolkit is active."""
         if self.uses_prompt_toolkit and patch_stdout is not None:
             return patch_stdout(raw=True)
         return _NullContext()
 
     def prompt_line(self, prompt_text: str) -> str:
-        """Read a line from the user while preserving input across async prints."""
+        """Read a line from the user without losing partial input on async prints."""
         self.set_prompt(prompt_text)
         if self.uses_prompt_toolkit and self._session is not None and ANSI is not None:
             return self._session.prompt(ANSI(prompt_text))
         return input(prompt_text)
 
     def show_notification(self, message: str) -> None:
-        """Print a message safely above the active input prompt."""
+        """Print an asynchronous notification above the active input prompt."""
         with self._print_lock:
             if self.uses_prompt_toolkit:
                 sys.stdout.write(f"{message}\n")
@@ -76,7 +76,7 @@ class ConsoleUI:
                 sys.stdout.flush()
 
     def show_line(self, message: str) -> None:
-        """Print a synchronous line (command output) safely under the print lock."""
+        """Print a synchronous line under the print lock."""
         with self._print_lock:
             sys.stdout.write(f"{message}\n")
             sys.stdout.flush()
@@ -88,7 +88,7 @@ class ConsoleUI:
         percent: int,
         peer_name: str | None = None,
     ) -> None:
-        """Display a clean milestone percentage update for an ongoing file transfer."""
+        """Display a percentage progress update for a file transfer."""
         target = f" ({peer_name})" if peer_name else ""
         color = GREEN if percent >= 100 else CYAN
         self.show_notification(
@@ -96,7 +96,7 @@ class ConsoleUI:
         )
 
     def refresh_input(self) -> None:
-        """Trigger a prompt_toolkit UI invalidation/redraw if an input session is active."""
+        """Trigger a prompt_toolkit UI redraw if a session is running."""
         if self._session is None:
             return
         app = getattr(self._session, "app", None)
@@ -118,6 +118,7 @@ _default_ui: ConsoleUI | None = None
 
 
 def _get_default_ui() -> ConsoleUI:
+    """Return or initialize the global ConsoleUI instance."""
     global _default_ui
     if _default_ui is None:
         _default_ui = ConsoleUI()
@@ -125,7 +126,7 @@ def _get_default_ui() -> ConsoleUI:
 
 
 def set_default_ui(ui: ConsoleUI) -> None:
-    """Register the active ConsoleUI instance for module-level helper functions."""
+    """Register the active ConsoleUI instance."""
     global _default_ui
     _default_ui = ui
 
@@ -141,10 +142,10 @@ def show_progress(
     percent: int,
     peer_name: str | None = None,
 ) -> None:
-    """Display a file transfer progress milestone via the active ConsoleUI."""
+    """Display a file transfer progress update via the active ConsoleUI."""
     _get_default_ui().show_progress(transfer_id, filename, percent, peer_name=peer_name)
 
 
 def refresh_input() -> None:
-    """Refresh the active input line via the active ConsoleUI."""
+    """Refresh the active input prompt via the active ConsoleUI."""
     _get_default_ui().refresh_input()
