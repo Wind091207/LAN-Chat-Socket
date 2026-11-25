@@ -208,7 +208,7 @@ Lưu ý:
 6. Dùng /leave để rời phiên, kiểm tra phòng Read-Only và dùng /chat để tham gia lại.
 7. Thử các trường hợp lỗi: nhập sai lệnh, gửi file không tồn tại, peer đóng ứng dụng khi đang chat hoặc ngắt mạng trong lúc truyền file.
 
-Để kiểm tra discovery và truyền dữ liệu trong môi trường thực tế, nên demo trên ít nhất hai máy tính trong cùng mạng LAN/Wi-Fi. Chạy nhiều terminal trên một máy không thay thế hoàn toàn cho kiểm thử mạng giữa các máy.
+Để kiểm tra discovery và truyền dữ liệu trong môi trường thực tế, nên demo trên ít nhất hai máy tính trong cùng mạng LAN/Wi-Fi. Chạy nhiều terminal trên một máy không thay thế hoàn toàn cho kiểm thử mạng giữa các máy hoặc các bạn có thể sử dụng máy ảo.
 
 ## ⚙️ Protocol & Network Configuration
 
