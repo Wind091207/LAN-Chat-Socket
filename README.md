@@ -53,7 +53,7 @@ Dự án triển khai các nội dung chính của Socket Programming:
   <raw UTF-8 payload>
   ~~~
 
-  Trong đó, <length> là số byte của payload, không phải số ký tự. Bên nhận đọc đúng số byte đã khai báo để tránh hiện tượng dính gói hoặc cắt gói TCP.
+  Trong đó, &lt;length&gt; là số byte của payload, không phải số ký tự. Bên nhận đọc đúng số byte đã khai báo để tránh hiện tượng dính gói hoặc cắt gói TCP.
 - Có thể giữ các phiên chat với nhiều peer; mỗi peer chỉ duy trì tối đa một kết nối chat, kể cả khi hai bên chủ động kết nối gần như đồng thời.
 - Lưu lịch sử tin nhắn và số tin chưa đọc theo từng peer trên máy cục bộ.
 - Nếu đang ở trạng thái AWAY và gửi tin nhắn, ứng dụng tự chuyển trạng thái về ONLINE.
@@ -179,9 +179,9 @@ Các tham số được hỗ trợ:
 | Lệnh / Phím tắt | Chức năng |
 |---|---|
 | /list | Hiển thị các peer đã phát hiện, địa chỉ, trạng thái và số tin chưa đọc. |
-| /chat <name\|number> | Mở hoặc tiếp tục chat với peer theo nickname hoặc số thứ tự. |
-| <text> | Gửi tin nhắn đến peer đang chat. |
-| /send <file_path> | Gửi file đến peer đang chat qua kết nối TCP riêng. Có thể đặt đường dẫn trong dấu nháy nếu chứa khoảng trắng. |
+| /chat &lt;name&#124;number&gt; | Mở hoặc tiếp tục chat với peer theo nickname hoặc số thứ tự. |
+| &lt;text&gt; | Gửi tin nhắn đến peer đang chat. |
+| /send &lt;file_path&gt; | Gửi file đến peer đang chat qua kết nối TCP riêng. Có thể đặt đường dẫn trong dấu nháy nếu chứa khoảng trắng. |
 | /status online | Chuyển trạng thái hiện diện thành ONLINE. |
 | /status away | Chuyển trạng thái hiện diện thành AWAY. |
 | /online hoặc /away | Lệnh tắt để đổi trạng thái. |
@@ -195,7 +195,7 @@ Các tham số được hỗ trợ:
 Lưu ý:
 
 - Lệnh /send sử dụng đường dẫn tương đối tính từ **thư mục làm việc hiện tại**. Khi chạy theo hướng dẫn ở trên, thư mục này là thư mục gốc repository.
-- Khi đang xem phòng Read-Only, cần dùng /chat <name> để tham gia lại trước khi gửi tin nhắn hoặc file.
+- Khi đang xem phòng Read-Only, cần dùng /chat &lt;name&gt; để tham gia lại trước khi gửi tin nhắn hoặc file.
 - Các phím tắt Ctrl+Q, Ctrl+C và Ctrl+B áp dụng cho giao diện TUI tương tác.
 
 ## 🧪 Suggested Test Flow
@@ -203,8 +203,8 @@ Lưu ý:
 1. Chạy ứng dụng trên ít nhất hai máy cùng mạng LAN/Wi-Fi với nickname và TCP port phù hợp.
 2. Chờ UDP discovery, sau đó dùng /list để kiểm tra peer xuất hiện.
 3. Dùng /status away và /status online để kiểm tra cập nhật presence.
-4. Dùng /chat <name|number> ở hai phía rồi trao đổi tin nhắn hai chiều.
-5. Khi đang chat, gửi một file bằng /send <file_path>; kiểm tra tiến độ ở bên gửi và file trong downloads/ ở bên nhận.
+4. Dùng /chat &lt;name&#124;number&gt; ở hai phía rồi trao đổi tin nhắn hai chiều.
+5. Khi đang chat, gửi một file bằng /send &lt;file_path&gt;; kiểm tra tiến độ ở bên gửi và file trong downloads/ ở bên nhận.
 6. Dùng /leave để rời phiên, kiểm tra phòng Read-Only và dùng /chat để tham gia lại.
 7. Thử các trường hợp lỗi: nhập sai lệnh, gửi file không tồn tại, peer đóng ứng dụng khi đang chat hoặc ngắt mạng trong lúc truyền file.
 
@@ -229,15 +229,15 @@ Các frame điều khiển kết thúc bằng newline:
 
 | Frame | Định dạng thực tế | Mục đích |
 |---|---|---|
-| HI | HI\|<name>\|<tcp_port> + newline | Trao đổi nickname và TCP port khi bắt đầu kết nối. |
-| MSG | MSG\|<length> + newline, sau đó là payload UTF-8 đúng <length> byte | Gửi tin nhắn văn bản. |
+| HI | HI&#124;&lt;name&gt;&#124;&lt;tcp_port&gt; + newline | Trao đổi nickname và TCP port khi bắt đầu kết nối. |
+| MSG | MSG&#124;&lt;length&gt; + newline, sau đó là payload UTF-8 đúng &lt;length&gt; byte | Gửi tin nhắn văn bản. |
 | BYE | BYE + newline | Kết thúc phiên chat. |
 
 ### TCP File Transfer
 
 - Mỗi file dùng một kết nối TCP riêng.
-- Header: FILE|<sender_name>|<filename>|<size> + newline.
-- Sau header là đúng <size> byte dữ liệu file.
+- Header: FILE&#124;&lt;sender_name&gt;&#124;&lt;filename&gt;&#124;&lt;size&gt; + newline.
+- Sau header là đúng &lt;size&gt; byte dữ liệu file.
 - Phía nhận phản hồi FILE_OK + newline sau khi lưu file thành công.
 - Kích thước file tối đa được giao thức cho phép là **1 GiB**.
 
