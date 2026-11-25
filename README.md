@@ -9,14 +9,15 @@
 **LAN Chat & File Sharing** là ứng dụng giao tiếp ngang hàng (P2P) hoạt động trong mạng cục bộ mà không cần máy chủ trung tâm. Mỗi nút (peer) vừa đóng vai trò Server lắng nghe kết nối, vừa là Client chủ động kết nối tới các máy khác.
 
 Dự án giải quyết các bài toán cốt lõi của lập trình mạng:
-* 📡 **Tự động khám phá & đồng bộ trạng thái:** Sử dụng **UDP Broadcast** (`port 9999`) để phát hiện người dùng mới và cập nhật trạng thái `online` / `away` theo thời gian thực.
-* 📦 **Truyền tin tin cậy & chống dính gói (Framing):** Sử dụng **TCP Unicast** kết hợp header độ dài byte UTF-8 để đảm bảo thông điệp không bị cắt xén hay dính liền trên dòng byte liên tục.
-* ⚡ **Truyền file không chặn luồng chat:** Tách kết nối và luồng gửi file riêng biệt để người dùng vẫn nhắn tin bình thường khi đang truyền tệp dung lượng lớn.
-* 🖥️ **Giao diện không đè dòng nhập:** Ứng dụng `prompt_toolkit` và cơ chế khóa luồng (`threading.Lock`) giúp tin nhắn đến hoặc tiến độ file không làm mất dòng chữ đang gõ.
+* **Tự động khám phá & đồng bộ trạng thái:** Sử dụng **UDP Broadcast** (`port 9999`) để phát hiện người dùng mới và cập nhật trạng thái `online` / `away` theo thời gian thực.
+* **Truyền tin tin cậy & chống dính gói (Framing):** Sử dụng **TCP Unicast** kết hợp header độ dài byte UTF-8 để đảm bảo thông điệp không bị cắt xén hay dính liền trên dòng byte liên tục.
+* **Truyền file không chặn luồng chat:** Tách kết nối và luồng gửi file riêng biệt để người dùng vẫn nhắn tin bình thường khi đang truyền tệp dung lượng lớn.
+* **Giao diện không đè dòng nhập:** Ứng dụng `prompt_toolkit` và cơ chế khóa luồng (`threading.Lock`) giúp tin nhắn đến hoặc tiến độ file không làm mất dòng chữ đang gõ.
 
 ### 👥 Nhóm thực hiện
-* 🧑‍💻 **[Họ và tên 1]** – [MSSV]
-* 🧑‍💻 **[Họ và tên 2]** – [MSSV]
+* **Vũ Thanh Phong** – 25120219
+* **Nguyễn Hoàng Huy** – 25120193
+* **Nguyễn Vũ Nhật Quang** - 25120225
 
 ## ✨ Features
 
@@ -48,8 +49,8 @@ Trước khi chạy chương trình, đảm bảo máy tính đã cài đặt:
 
 1. **Clone repository:**
 ```bash
-git clone [https://github.com/username/lan-chat-socket.git](https://github.com/username/lan-chat-socket.git)
-cd lan-chat-socket
+git clone https://github.com/Wind091207/LAN-Chat-Socket.git
+cd LAN-Chat-Socket
 ```
 
 2. **Cài đặt thư viện phụ thuộc:**
