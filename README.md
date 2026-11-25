@@ -90,13 +90,13 @@ Sau khi hai peer khởi động, dùng `/list` để kiểm tra các peer đư�
 | Command | Description |
 |---|---|
 | `/list` | Hiển thị peer đã phát hiện, địa chỉ, trạng thái và số tin chưa đọc. |
-| `/chat <name|number>` | Mở hoặc tiếp tục chat với peer theo tên hoặc số thứ tự trong danh sách. |
+| `/chat <name\|number>` | Mở hoặc tiếp tục chat với peer theo tên hoặc số thứ tự trong danh sách. |
 | `<message>` | Gửi tin nhắn tới peer đang chat. |
 | `/send <file_path>` | Gửi file tới peer đang chat trên kết nối TCP riêng. Đặt đường dẫn trong dấu ngoặc kép nếu có khoảng trắng. |
 | `/status online` | Chuyển trạng thái sang online. |
 | `/status away` | Chuyển trạng thái sang away. |
 | `/online`, `/away` | Lệnh tắt tương ứng của hai lệnh status trên. |
-| `/leave` | Rời phiên chat hiện tại và quay về Lobby. Lịch sử phòng vẫn được giữ ở chế độ chỉ đọc; dùng `/chat <name>` để chat lại. |
+| `/leave` | Rời phiên chat hiện tại và quay về Lobby. Lịch sử vẫn được lưu trên máy; trong TUI, phòng cũ có thể được mở lại ở chế độ chỉ đọc. Dùng `/chat <name>` để kết nối và chat lại. |
 | `/clear` | Xóa lịch sử và số tin chưa đọc của phòng đang xem trên máy hiện tại. Thao tác này cũng cập nhật dữ liệu lịch sử local. |
 | `/help` | Hiển thị hướng dẫn lệnh. |
 | `/quit` | Thoát ứng dụng và đóng các kết nối đang mở. |
@@ -124,11 +124,11 @@ README chỉ tóm tắt các loại bản tin chính; phần mô tả thiết k�
 
 | Transport | Frame | Purpose |
 |---|---|---|
-| UDP | `HELLO|<name>|<tcp_port>|<status>` | Quảng bá sự hiện diện của peer. |
-| TCP | `HI|<name>|<tcp_port>\n` | Định danh peer khi thiết lập kết nối chat. |
-| TCP | `MSG|<byte_length>\n<payload>` | Header cho biết số byte UTF-8 cần đọc tiếp. |
+| UDP | `HELLO\|<name>\|<tcp_port>\|<status>` | Quảng bá sự hiện diện của peer. |
+| TCP | `HI\|<name>\|<tcp_port>\n` | Định danh peer khi thiết lập kết nối chat. |
+| TCP | `MSG\|<byte_length>\n<payload>` | Header cho biết số byte UTF-8 cần đọc tiếp. |
 | TCP | `BYE\n` | Báo kết thúc phiên chat. |
-| TCP | `FILE|<sender_name>|<filename>|<size>\n<raw_bytes>` | Header metadata theo sau bởi đúng số byte dữ liệu file. |
+| TCP | `FILE\|<sender_name>\|<filename>\|<size>\n<raw_bytes>` | Header metadata theo sau bởi đúng số byte dữ liệu file. |
 | TCP | `FILE_OK\n` | Xác nhận bên nhận đã lưu file thành công. |
 
 Mỗi file được truyền trên một TCP connection riêng. Tên file nhận được được kiểm tra trước khi lưu; dữ liệu đang truyền được ghi vào file tạm `.part`, sau đó mới chuyển thành file hoàn chỉnh. Kết nối truyền file chỉ được xem là hoàn tất khi bên gửi nhận được `FILE_OK`.
