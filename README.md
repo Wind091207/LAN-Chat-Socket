@@ -99,45 +99,32 @@ prompt_toolkit==3.0.53
 
 ## 🛠️ Installation
 
-1. **Clone repository:**
+1. **Clone repository và di chuyển vào thư mục gốc dự án:**
 
-   ~~~bash
-   git clone https://github.com/Wind091207/LAN-Chat-Socket.git
+   ```bash
+   git clone [https://github.com/Wind091207/LAN-Chat-Socket.git](https://github.com/Wind091207/LAN-Chat-Socket.git)
    cd LAN-Chat-Socket
-   ~~~
+   ```
 
-2. **Tạo virtual environment:**
+2. **Cài đặt thư viện phụ thuộc (`prompt_toolkit`):**
 
-   ~~~bash
-   python -m venv .venv
-   ~~~
+   - **Trên Windows** *(có thể cài trực tiếp vào môi trường Python mặc định, không bắt buộc tạo `.venv`)*:
 
-3. **Kích hoạt môi trường ảo:**
+     ```powershell
+     python -m pip install -r requirements.txt
+     ```
 
-   Windows PowerShell:
+   - **Trên Linux / Ubuntu** *(khuyên dùng `.venv` để tránh xung đột với cơ chế bảo vệ môi trường Python hệ thống — PEP 668)*:
 
-   ~~~powershell
-   .venv\Scripts\Activate.ps1
-   ~~~
+     ```bash
+     python3 -m venv .venv
+     source .venv/bin/activate
+     pip install -r requirements.txt
+     ```
 
-   Windows Git Bash:
+     > **Mẹo nhanh trên Ubuntu/Debian:** Nếu không muốn tạo `.venv`, bạn có thể cài trực tiếp gói thư viện từ kho hệ thống bằng lệnh `sudo apt update && sudo apt install -y python3-prompt-toolkit`.
 
-   ~~~bash
-   source .venv/Scripts/activate
-   ~~~
-
-   Linux/macOS:
-
-   ~~~bash
-   source .venv/bin/activate
-   ~~~
-
-4. **Cài dependency:**
-
-   ~~~bash
-   python -m pip install -r requirements.txt
-   ~~~
-
+*(Lưu ý: Nếu chạy không cài `prompt_toolkit`, ứng dụng vẫn tự động chuyển sang chế độ Console fallback cơ bản, nhưng nên cài thư viện để trải nghiệm đầy đủ giao diện chia khung TUI).*
 ## 🚀 Usage
 
 Chạy lệnh từ **thư mục gốc repository**. Mỗi peer cần nickname và TCP port hợp lệ. Tham số đúng theo chương trình là **--tcp-port** (không phải --port).
