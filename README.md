@@ -1,159 +1,196 @@
-# 💬 LAN Chat & File Sharing (Socket Programming)
+# LAN Chat & File Sharing
 
-<div align="center">
-  <p><strong>🚀 Ứng dụng nhắn tin P2P và truyền file trong mạng nội bộ (LAN/Wi-Fi) bằng Python Socket API (UDP Broadcast & TCP Unicast)</strong></p>
-</div>
+**Ứng dụng nhắn tin ngang hàng (P2P) và truyền file trong mạng LAN/Wi-Fi, xây dựng bằng Python Socket API.**
 
-## 📖 Overview
+Sử dụng **UDP Broadcast** để khám phá peer và cập nhật trạng thái, **TCP** để nhắn tin và truyền file trực tiếp giữa các máy.
 
-**LAN Chat & File Sharing** là ứng dụng giao tiếp ngang hàng (P2P) hoạt động trong mạng cục bộ mà không cần máy chủ trung tâm. Mỗi nút (peer) vừa đóng vai trò Server lắng nghe kết nối, vừa là Client chủ động kết nối tới các máy khác.
+## Overview
 
-Dự án giải quyết các bài toán cốt lõi của lập trình mạng:
-* **Tự động khám phá & đồng bộ trạng thái:** Sử dụng **UDP Broadcast** (`port 9999`) để phát hiện người dùng mới và cập nhật trạng thái `online` / `away` theo thời gian thực.
-* **Truyền tin tin cậy & chống dính gói (Framing):** Sử dụng **TCP Unicast** kết hợp header độ dài byte UTF-8 để đảm bảo thông điệp không bị cắt xén hay dính liền trên dòng byte liên tục.
-* **Truyền file không chặn luồng chat:** Tách kết nối và luồng gửi file riêng biệt để người dùng vẫn nhắn tin bình thường khi đang truyền tệp dung lượng lớn.
-* **Giao diện không đè dòng nhập:** Ứng dụng `prompt_toolkit` và cơ chế khóa luồng (`threading.Lock`) giúp tin nhắn đến hoặc tiến độ file không làm mất dòng chữ đang gõ.
+Mỗi máy chạy ứng dụng là một peer: vừa lắng nghe kết nối TCP đến, vừa có thể chủ động kết nối tới peer khác. Ứng dụng không cần máy chủ trung tâm.
 
-### 👥 Nhóm thực hiện
-* **Vũ Thanh Phong** – 25120219
-* **Nguyễn Hoàng Huy** – 25120193
-* **Nguyễn Vũ Nhật Quang** - 25120225
+### Features
 
-## ✨ Features
+- **Peer Discovery & Presence (UDP):** Broadcast thông tin `HELLO` mỗi 3 giây qua UDP port `9999`; peer không còn gửi thông tin trong hơn 10 giây sẽ được đánh dấu offline.
+- **TCP Chat:** Nhắn tin hai chiều, quản lý phiên chat theo peer và lưu số tin nhắn chưa đọc.
+- **Message Framing:** Header chứa độ dài payload UTF-8 theo byte, giúp bên nhận tách đúng từng thông điệp trên TCP stream.
+- **File Transfer:** Mỗi lần gửi file sử dụng một kết nối TCP riêng và một worker thread riêng; hiển thị tiến độ theo các mốc 25%, 50%, 75% và 100%.
+- **Terminal UI:** Giao diện tương tác với `prompt_toolkit`; khi không có terminal tương tác hoặc thư viện không khả dụng, ứng dụng dùng CLI fallback.
+- **Local Chat History:** Lưu lịch sử theo peer trên máy đang chạy ứng dụng.
 
-* 🛰️ **Milestone 1 – Khám phá peer & Trạng thái hiện diện (UDP):**
-  * Broadcast gói tin `HELLO|<name>|<tcp_port>|<status>` mỗi **3 giây** trên cổng `9999`, tự động lọc bỏ gói tin do chính mình phát ra.
-  * Quản lý danh sách peer (`tên`, `IP`, `cổng TCP`, `trạng thái`); tự động xóa và báo `offline` nếu quá **10 giây** không nhận được gói `HELLO` mới.
-  * Đổi trạng thái `online` / `away` qua lệnh `/status` và phát cập nhật tức thì qua UDP.
-* 💬 **Milestone 2 – Nhắn tin đa peer & Framing (TCP):**
-  * Duy trì tối đa một kết nối TCP cho mỗi cặp peer và định danh khi mở kết nối bằng gói `HI|<name>|<tcp_port>|`.
-  * Đóng khung tin nhắn theo số byte UTF-8 (`MSG|<length>|<utf-8 text>`) để chống dính gói / cắt gói TCP.
-  * Lưu lại tin nhắn từ peer không phải đối tác hiện tại và hiển thị số tin chưa đọc (`unread`).
-* 📁 **Milestone 3 – Truyền file song song & Tiến độ (TCP):**
-  * Gửi file (`/send <file>`) trên một kết nối TCP và luồng riêng biệt, không làm chặn luồng chat.
-  * Hiển thị `%` tiến độ theo từng mốc (`25%`, `50%`, `75%`, `100%`).
-  * Lưu file nhận được vào thư mục `downloads/` (ghi qua file tạm `.part`, đổi tên khi hoàn tất và xóa file dở nếu mất kết nối).
-* 🎨 **Milestone 4 – Giao diện Console TUI & Xử lý lỗi:**
-  * Giao diện chia cột bằng `prompt_toolkit` (có chế độ fallback CLI cơ bản) kèm `threading.Lock` bảo vệ màn hình, giữ nguyên dòng chữ đang gõ khi có tin đến.
-  * Hỗ trợ đầy đủ bộ lệnh `/list`, `/chat`, `/send`, `/leave`, `/status`, `/help`, `/quit` cùng `/clear` xóa lịch sử cục bộ của phòng hiện tại.
-  * Xử lý ổn định 5 tình huống lỗi: chat với người vừa offline, peer tắt ngang không gửi `BYE|`, mất mạng giữa lúc gửi file, gói tin sai định dạng, và sai lệnh/file không tồn tại.
+## Team
 
-## 📋 Prerequisites
+- **Vũ Thanh Phong** — 25120219
+- **Nguyễn Hoàng Huy** — 25120193
+- **Nguyễn Vũ Nhật Quang** — 25120225
 
-Trước khi chạy chương trình, đảm bảo máy tính đã cài đặt:
-* 🐍 **Python 3.10** trở lên (Windows / Linux / macOS)
-* 🧩 Thư viện giao diện terminal **`prompt_toolkit`**
-* 🌐 Kết nối cùng một mạng **LAN / Wi-Fi** (mở quyền truy cập mạng Private/LAN trên Firewall cho Python để nhận gói UDP cổng `9999` và kết nối TCP)
+## Prerequisites
 
-## 🛠️ Installation
+- Python **3.10 or newer**.
+- Hai hoặc nhiều máy trong cùng mạng LAN/Wi-Fi để kiểm thử thực tế.
+- Cho phép Python nhận kết nối TCP và gói UDP broadcast trong firewall của hệ điều hành.
+- Các thư viện Python được liệt kê trong `requirements.txt`.
 
-1. **Clone repository:**
+> Khuyến nghị chạy thử trên hai máy tính cùng mạng. Một số mạng Wi-Fi khách có thể bật client isolation và chặn các thiết bị liên lạc trực tiếp.
+
+## Installation
+
+Clone repository:
+
 ```bash
 git clone https://github.com/Wind091207/LAN-Chat-Socket.git
 cd LAN-Chat-Socket
 ```
 
-2. **Cài đặt thư viện phụ thuộc:**
-```bash
-pip install prompt_toolkit
+Tạo và kích hoạt virtual environment.
+
+**Windows (PowerShell):**
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-## 🚀 Usage
+**Linux / macOS:**
 
-Chạy chương trình trên ít nhất 2 máy cùng mạng LAN (hoặc mở nhiều cửa sổ terminal trên cùng một máy với cổng TCP khác nhau):
-
-**💻 Trên Máy 1 (ví dụ: Quan – TCP port 5000):**
 ```bash
-python src/main.py --name Quan --port 5000
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-**💻 Trên Máy 2 (ví dụ: Minh – TCP port 6000):**
+Cài dependency:
+
 ```bash
-python src/main.py --name Minh --port 6000
+python -m pip install -r requirements.txt
 ```
-*(Nếu phiên bản của nhóm nhập tên và cổng từ bàn phím sau khi khởi chạy, dùng lệnh `python src/main.py` và nhập theo hướng dẫn trên màn hình).*
 
-### ⌨️ Bảng lệnh hỗ trợ
+Chi tiết thiết lập môi trường phát triển có trong [SetUp.md](SetUp.md).
 
-| Lệnh / Phím tắt | Chức năng |
-| :--- | :--- |
-| `/list` | 📋 Hiển thị danh sách online: số thứ tự, tên, IP, trạng thái và số tin chưa đọc |
-| `/chat <tên \| số>` | 💬 Mở chat với peer được chọn (kết nối TCP) |
-| `<văn bản>` | ✉️ Gửi tin nhắn cho đối tác hiện tại |
-| `/send <file>` | 📤 Gửi file cho đối tác hiện tại trên luồng TCP riêng |
-| `/leave` | 🚪 Đóng cuộc chat hiện tại (gửi `BYE\|` và chuyển phòng sang Read-Only) |
-| `/status <online \| away>` | 🟢 Đổi trạng thái hiện diện và phát qua UDP (hỗ trợ `/online`, `/away`) |
-| `/clear` | 🧹 Xóa lịch sử trò chuyện của phòng hiện tại trên máy cục bộ |
-| `/help` | ❓ Xem danh sách lệnh |
-| `/quit` hoặc `Ctrl + Q` | 🛑 Ngừng phát `HELLO`, gửi `BYE\|` trên các kết nối đang mở và thoát |
-| `Ctrl + B` | 🗂️ Ẩn/hiện thanh danh sách peer bên trái (hoặc click chuột trực tiếp) |
+## Run
 
-## 🧪 Example
+Chạy lệnh từ **thư mục gốc của repository**.
 
-Minh họa kịch bản giao tiếp và kiểm thử thực tế giữa các peer:
+**Máy 1:**
+
+```bash
+python src/main.py --name Quan --tcp-port 5000
+```
+
+**Máy 2:**
+
+```bash
+python src/main.py --name Minh --tcp-port 6000
+```
+
+Mỗi instance cần một TCP port riêng. Mặc định ứng dụng broadcast tới `255.255.255.255:9999`; có thể chỉ định địa chỉ broadcast khác bằng tham số `--bcast`.
+
+Sau khi hai peer khởi động, dùng `/list` để kiểm tra các peer được phát hiện. Mở firewall cho Python nếu hai máy không nhìn thấy hoặc không kết nối được với nhau.
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `/list` | Hiển thị peer đã phát hiện, địa chỉ, trạng thái và số tin chưa đọc. |
+| `/chat <name|number>` | Mở hoặc tiếp tục chat với peer theo tên hoặc số thứ tự trong danh sách. |
+| `<message>` | Gửi tin nhắn tới peer đang chat. |
+| `/send <file_path>` | Gửi file tới peer đang chat trên kết nối TCP riêng. Đặt đường dẫn trong dấu ngoặc kép nếu có khoảng trắng. |
+| `/status online` | Chuyển trạng thái sang online. |
+| `/status away` | Chuyển trạng thái sang away. |
+| `/online`, `/away` | Lệnh tắt tương ứng của hai lệnh status trên. |
+| `/leave` | Rời phiên chat hiện tại và quay về Lobby. Lịch sử phòng vẫn được giữ ở chế độ chỉ đọc; dùng `/chat <name>` để chat lại. |
+| `/clear` | Xóa lịch sử và số tin chưa đọc của phòng đang xem trên máy hiện tại. Thao tác này cũng cập nhật dữ liệu lịch sử local. |
+| `/help` | Hiển thị hướng dẫn lệnh. |
+| `/quit` | Thoát ứng dụng và đóng các kết nối đang mở. |
+
+Khi giao diện TUI đang hoạt động:
+
+- `Ctrl + B`: Ẩn/hiện thanh peer.
+- `Ctrl + Q`: Thoát ứng dụng.
+- Có thể chọn peer trong thanh bên để xem lịch sử; cần dùng `/chat <name>` để bắt đầu hoặc tiếp tục phiên chat.
+
+Nếu ứng dụng đang ở CLI fallback, dùng `/quit` để thoát.
+
+## Quick Test
+
+1. Khởi chạy hai peer trên hai máy cùng mạng.
+2. Dùng `/list` để xác nhận hai peer đã phát hiện nhau.
+3. Thử `/status away` và kiểm tra trạng thái ở máy còn lại.
+4. Dùng `/chat Minh` (hoặc tên peer tương ứng) rồi gửi tin nhắn hai chiều.
+5. Trong lúc chat, dùng `/send <file_path>`; kiểm tra file nhận được trong thư mục `downloads/`.
+6. Thử `/leave`, `/chat <name>` để vào lại phòng và `/quit` để thoát.
+
+## Protocol Summary
+
+README chỉ tóm tắt các loại bản tin chính; phần mô tả thiết kế và cơ chế framing chi tiết thuộc báo cáo đồ án.
+
+| Transport | Frame | Purpose |
+|---|---|---|
+| UDP | `HELLO|<name>|<tcp_port>|<status>` | Quảng bá sự hiện diện của peer. |
+| TCP | `HI|<name>|<tcp_port>\n` | Định danh peer khi thiết lập kết nối chat. |
+| TCP | `MSG|<byte_length>\n<payload>` | Header cho biết số byte UTF-8 cần đọc tiếp. |
+| TCP | `BYE\n` | Báo kết thúc phiên chat. |
+| TCP | `FILE|<sender_name>|<filename>|<size>\n<raw_bytes>` | Header metadata theo sau bởi đúng số byte dữ liệu file. |
+| TCP | `FILE_OK\n` | Xác nhận bên nhận đã lưu file thành công. |
+
+Mỗi file được truyền trên một TCP connection riêng. Tên file nhận được được kiểm tra trước khi lưu; dữ liệu đang truyền được ghi vào file tạm `.part`, sau đó mới chuyển thành file hoàn chỉnh. Kết nối truyền file chỉ được xem là hoàn tất khi bên gửi nhận được `FILE_OK`.
+
+## Runtime Data
+
+Khi chạy từ thư mục gốc repository, ứng dụng sử dụng:
+
+- `data/`: lịch sử chat local dạng JSON, tách theo tên và TCP port của instance.
+- `downloads/`: file nhận từ peer.
+
+Các thư mục này được tạo khi cần và không cần commit dữ liệu cá nhân lên Git.
+
+## Project Structure
 
 ```text
-# 1. Khám phá peer & đổi trạng thái (UDP)
- [System] Minh (192.168.1.12:6000) is online
- [System] Minh is now AWAY
-
-# 2. Mở kết nối chat & nhắn tin hai chiều (TCP Framing)
-> /chat Minh
- [Joined] Connected to Minh (192.168.1.12:6000) — Type /leave to exit
- [Chat] [You]: Chào Minh, sẵn sàng demo chưa?
- [Chat] [Minh]: Rồi! Gửi mình slide nhé
-
-# 3. Gửi file song song không chặn chat
-> /send slides.pdf
- [File] 'slides.pdf' -> Minh: [########--------] 50%
- [Chat] [You]: Ok, đang gửi rồi đó
- [File] Sent 'slides.pdf' (2,516,582 bytes) to Minh.
-
-# 4. Kết thúc cuộc trò chuyện
-> /leave
- [System] Left chat with Minh (192.168.1.12:6000).
+LAN-Chat-Socket/
+├── src/
+│   ├── chat_state.py
+│   ├── cli.py
+│   ├── console_ui.py
+│   ├── file_receiver.py
+│   ├── file_transfer.py
+│   ├── main.py
+│   ├── peer_registry.py
+│   ├── protocol.py
+│   ├── tcp_transport.py
+│   └── udp_discovery.py
+├── milestones/
+├── requirements.txt
+├── REQUIREMENTS.md
+├── SetUp.md
+├── GithubTutorial.md
+└── README.md
 ```
 
-### 🛡️ Kịch bản kiểm thử các nhánh lỗi
-1. 🔌 **Chat với người vừa offline:** Tắt Minh, Quan gõ ngay `/chat Minh` $\rightarrow$ báo lỗi kết nối, chương trình không crash.
-2. 💥 **Peer crash giữa lúc chat:** Đóng ngang cửa sổ terminal của Minh không gửi `BYE|` $\rightarrow$ báo mất kết nối.
-3. 📶 **Mất mạng khi đang gửi file:** Ngắt Wi-Fi lúc tiến độ đạt ~50% $\rightarrow$ hai bên báo lỗi, bên nhận tự động xóa file tạm `.part`.
-4. 🚫 **Gói sai định dạng:** Dùng `nc <IP> <PORT>` gửi chuỗi `"abc"` $\rightarrow$ đóng riêng kết nối không hợp lệ đó, chương trình vẫn chạy tiếp.
-5. ⚠️ **Lệnh sai / File không tồn tại:** Gõ `/chta Minh` hoặc `/send khongco.pdf` $\rightarrow$ in trợ giúp ngắn / báo không tìm thấy file.
+## Troubleshooting
 
-## 📂 Project Structure
+**Không thấy peer trong `/list`:**
 
-```text
-lan-chat-socket/
-├── 📂 src/
-│   ├── 🐍 main.py             # Điểm khởi chạy chương trình, khởi tạo các luồng mạng & UI
-│   ├── 🐍 cli.py              # Xử lý lệnh người dùng, điều phối phòng chat & sự kiện
-│   ├── 🐍 console_ui.py       # Giao diện TUI chia cột (prompt_toolkit) & fallback CLI
-│   ├── 🐍 chat_state.py       # Quản lý lịch sử hội thoại cục bộ & bộ đếm tin chưa đọc
-│   ├── 🐍 udp_discovery.py    # Broadcast gói HELLO (3s) & lắng nghe peer qua UDP
-│   ├── 🐍 peer_registry.py    # Bảng lưu trữ peer online/away & kiểm tra timeout (10s)
-│   ├── 🐍 tcp_transport.py    # TCP server/client, framing HI/MSG/BYE & định tuyến FILE
-│   ├── 🐍 file_transfer.py    # Luồng gửi file TCP riêng biệt & báo cáo % tiến độ
-│   └── 🐍 file_receiver.py    # Nhận file vào downloads/, quản lý file tạm .part
-├── 📥 downloads/              # Thư mục tự động tạo để lưu file nhận được từ peer
-├── 💾 data/                   # Lưu lịch sử trò chuyện cục bộ dạng JSON theo từng peer
-├── 📄 docs/                   # Báo cáo đồ án & ảnh chụp bắt gói Wireshark
-└── 📝 README.md
-```
+- Kiểm tra hai máy có cùng mạng LAN/Wi-Fi hay không.
+- Kiểm tra firewall có cho phép Python nhận UDP broadcast trên port `9999` không.
+- Kiểm tra router/access point có bật client isolation hay không.
 
-## ⚙️ Configuration
+**Không kết nối được TCP:**
 
-* 🔌 **Cổng mạng mặc định:**
-  * **UDP Discovery:** Cổng cố định `9999` (broadcast tới `255.255.255.255`), chu kỳ gửi `3s`, thời gian hết hạn `10s`.
-  * **TCP Chat & File:** Cấu hình linh hoạt qua tham số `--port` (ví dụ `5000`, `6000`) để chạy nhiều tiến trình trên cùng một máy hoặc nhiều máy khác nhau.
-* 📡 **Đặc tả khung bản tin giao thức:**
-  * UDP hiện diện: `HELLO|<name>|<tcp_port>|<status>`
-  * TCP định danh kết nối: `HI|<name>|<tcp_port>|`
-  * TCP tin nhắn: `MSG|<length>|<utf-8 text>` (với `<length>` là số byte UTF-8)
-  * TCP truyền file: `FILE|<filename>|<size>|<raw bytes>` (mỗi file một kết nối TCP riêng)
-  * TCP kết thúc chat: `BYE|`
-* 🗂️ **Thư mục dữ liệu:** Chương trình tự động khởi tạo `downloads/` (lưu tệp tải về) và `data/` (lưu lịch sử chat cục bộ dạng JSON) ngay tại thư mục gốc khi chạy.
+- Xác nhận peer đích vẫn đang chạy.
+- Kiểm tra IP và TCP port hiển thị trong `/list`.
+- Cho phép kết nối TCP qua firewall trên máy nhận.
 
-## 🤝 Contributing
+**Không gửi/nhận được file:**
 
-Mọi đóng góp, báo lỗi hoặc đề xuất cải tiến đều được hoan nghênh. Vui lòng tạo Issue hoặc gửi Pull Request trực tiếp trên repository của nhóm.
+- Kiểm tra đường dẫn file ở máy gửi.
+- Kiểm tra quyền ghi vào thư mục `downloads/`.
+- Nếu kết nối bị ngắt giữa chừng, file tạm chưa hoàn chỉnh sẽ được dọn dẹp bởi bên nhận.
+
+**Không hiển thị giao diện TUI:**
+
+- Cài dependency bằng `python -m pip install -r requirements.txt`.
+- Chạy trong terminal tương tác có stdin/stdout TTY. Nếu điều kiện này không đáp ứng, chương trình sử dụng CLI fallback.
+
+## Project Documents
+
+- [SetUp.md](SetUp.md) — hướng dẫn chuẩn bị môi trường.
+- [REQUIREMENTS.md](REQUIREMENTS.md) — yêu cầu và phạm vi đồ án.
