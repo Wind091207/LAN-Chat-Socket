@@ -29,6 +29,11 @@ __MACOSX/
 /downloads/*
 !/downloads/.gitkeep
 *.log
+downloads/
+Download/
+data/
+
+
 
 # Course reference material kept locally, not for redistribution
 /reference-materials-local/
