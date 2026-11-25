@@ -1,8 +1,6 @@
 # 💬 LAN Chat & File Sharing (Socket Programming)
 
 <div align="center">
-  <img src="[YOUR_BANNER_URL](https://www.pinterest.com/pin/981362575094503737/)" width="100%" />
-
   <p><strong>🚀 Ứng dụng nhắn tin P2P và truyền file trong mạng nội bộ (LAN/Wi-Fi) bằng Python Socket API (UDP Broadcast & TCP Unicast)</strong></p>
 </div>
 
@@ -139,8 +137,7 @@ lan-chat-socket/
 ├── 📥 downloads/              # Thư mục tự động tạo để lưu file nhận được từ peer
 ├── 💾 data/                   # Lưu lịch sử trò chuyện cục bộ dạng JSON theo từng peer
 ├── 📄 docs/                   # Báo cáo đồ án & ảnh chụp bắt gói Wireshark
-├── 📝 README.md
-└── 📜 LICENSE
+└── 📝 README.md
 ```
 
 ## ⚙️ Configuration
@@ -159,11 +156,3 @@ lan-chat-socket/
 ## 🤝 Contributing
 
 Mọi đóng góp, báo lỗi hoặc đề xuất cải tiến đều được hoan nghênh. Vui lòng tạo Issue hoặc gửi Pull Request trực tiếp trên repository của nhóm.
-
-## 📜 License
-
-This project is licensed under the MIT License.
-
-<div align="center">
-  <img src="YOUR_FOOTER_IMAGE_URL" width="280" />
-</div>
