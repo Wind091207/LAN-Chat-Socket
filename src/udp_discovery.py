@@ -16,6 +16,7 @@ class UDPDiscovery:
         bcast_addr: str = "255.255.255.255",
         port: int = 9999,
     ):
+        """Khởi tạo các tham số cấu hình và luồng cho UDP Discovery."""
         self.name = name
         self.tcp_port = tcp_port
         self.registry = registry
@@ -62,10 +63,25 @@ class UDPDiscovery:
         self._send_thread.start()
         self._recv_thread.start()
 
+    def _send_hello(self):
+        """Đóng gói và phát ngay một bản tin HELLO qua UDP Broadcast."""
+        if not self.sock:
+            return
+        with self._lock:
+            current_status = self.status
+
+        msg = f"HELLO|{self.name}|{self.tcp_port}|{current_status}"
+        try:
+            self.sock.sendto(msg.encode("utf-8"), (self.bcast_addr, self.port))
+        except OSError:
+            pass
+
     def set_status(self, new_status: str):
-        """Cập nhật trạng thái hiển thị của bản thân (online/away)."""
+        """Cập nhật trạng thái hiển thị (online/away) và phát gói HELLO ngay lập tức."""
         with self._lock:
             self.status = new_status
+        if self.running:
+            self._send_hello()
 
     def stop(self):
         """Dừng các luồng UDP Discovery và đóng socket."""
@@ -84,19 +100,9 @@ class UDPDiscovery:
                 pass
 
     def _send_loop(self):
-        """Phát gói tin HELLO qua UDP Broadcast mỗi 3 giây."""
+        """Phát gói tin HELLO qua UDP Broadcast định kỳ mỗi 3 giây."""
         while self.running:
-            with self._lock:
-                current_status = self.status
-
-            msg = f"HELLO|{self.name}|{self.tcp_port}|{current_status}"
-            data = msg.encode("utf-8")
-
-            try:
-                self.sock.sendto(data, (self.bcast_addr, self.port))
-            except OSError:
-                pass
-
+            self._send_hello()
             time.sleep(3)
 
     def _recv_loop(self):

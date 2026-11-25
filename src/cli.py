@@ -1,3 +1,5 @@
+"""Điều phối giao diện người dùng, xử lý lệnh và vòng lặp sự kiện mạng."""
+
 from __future__ import annotations
 
 import os
@@ -22,10 +24,12 @@ if os.name == "nt":
 
 
 def _make_peer_id(peer: dict) -> tuple[str, int]:
+    """Tạo định danh duy nhất (ip, tcp_port) cho peer."""
     return (peer["ip"], int(peer["tcp_port"]))
 
 
 def _get_sorted_peers(registry) -> list[dict]:
+    """Lấy danh sách peer từ registry và sắp xếp theo tên, IP, cổng."""
     return sorted(
         registry.get_peers(),
         key=lambda p: (p["name"].casefold(), p["ip"], p["tcp_port"]),
@@ -33,6 +37,7 @@ def _get_sorted_peers(registry) -> list[dict]:
 
 
 def _resolve_peer(target: str, peers: list[dict]) -> tuple[dict | None, str | None]:
+    """Tìm peer theo số thứ tự hoặc tên không phân biệt hoa thường."""
     if not peers:
         return None, "No other peers discovered."
 
@@ -51,6 +56,7 @@ def _resolve_peer(target: str, peers: list[dict]) -> tuple[dict | None, str | No
 
 
 def _extract_event_peer_info(data) -> tuple[tuple[str, int] | None, str]:
+    """Trích xuất peer_id và tên hiển thị từ dữ liệu sự kiện."""
     if isinstance(data, dict):
         peer_obj = data.get("peer") if isinstance(data.get("peer"), dict) else data
         peer_id = data.get("peer_id")
@@ -94,16 +100,19 @@ HELP_FRAGMENTS: StyleAndTextTuples = [
 
 
 def _now_str() -> str:
+    """Lấy chuỗi thời gian hiện tại theo định dạng HH:MM:SS."""
     return datetime.now().strftime("%H:%M:%S")
 
 
 def _format_size(num_bytes: int) -> str:
+    """Định dạng kích thước tệp kèm dấu phân cách hàng nghìn."""
     return f"{num_bytes:,} bytes"
 
 
 def _format_chat_fragments(
     sender: str, text: str, is_self: bool, ts: str | None = None
 ) -> StyleAndTextTuples:
+    """Định dạng một dòng tin nhắn chat thành các fragment hiển thị."""
     time_str = f" [{ts or _now_str()}] "
     if is_self:
         return [
@@ -121,6 +130,7 @@ def _format_chat_fragments(
 
 
 def _format_join_log(message: str) -> StyleAndTextTuples:
+    """Định dạng thông báo hệ thống khi tham gia phòng chat."""
     return [
         ("class:ts", f" [{_now_str()}] "),
         ("class:tag.join", "[System] "),
@@ -129,6 +139,7 @@ def _format_join_log(message: str) -> StyleAndTextTuples:
 
 
 def _format_leave_log(message: str) -> StyleAndTextTuples:
+    """Định dạng thông báo hệ thống khi rời hoặc mất kết nối chat."""
     return [
         ("class:ts", f" [{_now_str()}] "),
         ("class:tag.leave", "[System] "),
@@ -137,6 +148,7 @@ def _format_leave_log(message: str) -> StyleAndTextTuples:
 
 
 def _build_history_fragments(history, partner_name: str) -> list[StyleAndTextTuples]:
+    """Chuyển đổi lịch sử tin nhắn đã lưu thành danh sách fragment hiển thị."""
     if not history:
         return []
     result: list[StyleAndTextTuples] = [[("class:msg.muted", " --- Previous messages ---")]]
@@ -183,6 +195,7 @@ def _render_peer_sidebar(
     is_compact_drawer: bool = False,
     on_toggle_collapse=None,
 ) -> StyleAndTextTuples:
+    """Kết xuất danh sách peer và trạng thái hiện diện trên thanh bên."""
     peers = _get_sorted_peers(registry)
     with state_lock:
         viewed_id = state["viewed_room_id"]
@@ -192,6 +205,7 @@ def _render_peer_sidebar(
     fragments: StyleAndTextTuples = []
 
     def _lobby_click(mouse_event):
+        """Xử lý sự kiện click chuột vào mục Lobby."""
         if MouseEventType is not None and mouse_event.event_type == MouseEventType.MOUSE_UP:
             on_view_lobby()
             return None
@@ -229,6 +243,7 @@ def _render_peer_sidebar(
         peer_name = peer["name"]
 
         def _make_click_handler(target_peer_id: tuple[str, int], target_name: str):
+            """Tạo hàm xử lý click chuột cho từng dòng peer."""
             def _handler(mouse_event):
                 if MouseEventType is not None and mouse_event.event_type == MouseEventType.MOUSE_UP:
                     on_view_peer(target_name, target_peer_id)
@@ -286,6 +301,7 @@ def _render_peer_sidebar(
 
     if not is_compact_drawer and on_toggle_collapse is not None:
         def _collapse_click(mouse_event):
+            """Xử lý sự kiện click thu gọn thanh bên."""
             if MouseEventType is not None and mouse_event.event_type == MouseEventType.MOUSE_UP:
                 on_toggle_collapse()
                 return None
@@ -308,6 +324,7 @@ def _consume_events(
     on_room_locked,
     on_refresh,
 ):
+    """Vòng lặp nền tiêu thụ sự kiện từ hàng đợi mạng và cập nhật giao diện."""
     while not stop_event.is_set():
         try:
             event_type, data = events.get(timeout=0.2)
@@ -439,17 +456,37 @@ def _consume_events(
                 if peer_id is not None
                 else sender_name
             )
-            emit_room_fn(None, _format_leave_log(f"{peer_label} left the chat."))
+            is_crash = event_type == "disconnected"
+            action_text = (
+                "disconnected unexpectedly (connection lost)."
+                if is_crash
+                else "left the chat."
+            )
 
-            if peer_id is not None and has_room_fn(peer_id):
-                emit_room_fn(
-                    peer_id,
-                    [
-                        ("class:ts", ts),
-                        ("class:tag.leave", "[System] "),
-                        ("class:msg.leave", f"{sender_name} left the chat."),
-                    ],
-                )
+            was_active = False
+            if peer_id is not None:
+                with state_lock:
+                    if state["active_chat_id"] == peer_id:
+                        state["active_chat_id"] = None
+                        state["active_chat_name"] = None
+                        was_active = True
+                        if chat_state:
+                            chat_state.set_current_partner(None)
+
+            emit_room_fn(None, _format_leave_log(f"{peer_label} {action_text}"))
+
+            if peer_id is not None:
+                if was_active:
+                    on_room_locked(peer_id, peer_label)
+                if has_room_fn(peer_id):
+                    emit_room_fn(
+                        peer_id,
+                        [
+                            ("class:ts", ts),
+                            ("class:tag.leave", "[Read-Only] " if was_active else "[System] "),
+                            ("class:msg.leave", f"{sender_name} {action_text}"),
+                        ],
+                    )
             on_refresh()
 
         elif event_type == "file_progress" and isinstance(data, dict):
@@ -525,6 +562,7 @@ def run_cli(
     file_sender=None,
     sender_name: str = "",
 ):
+    """Khởi chạy giao diện người dùng và vòng lặp xử lý lệnh chính."""
     state = {
         "viewed_room_id": None,
         "active_chat_id": None,
@@ -545,6 +583,7 @@ def run_cli(
     set_default_ui(fallback_ui)
 
     def emit_fn(fragments: StyleAndTextTuples) -> None:
+        """Hiển thị thông báo lên phòng đang xem hoặc giao diện dự phòng."""
         if tui is not None:
             tui.append_fragments(fragments)
         else:
@@ -552,6 +591,7 @@ def run_cli(
             fallback_ui.show_notification(plain)
 
     def emit_room_fn(room_key, fragments: StyleAndTextTuples) -> None:
+        """Ghi một dòng nội dung vào phòng chat chỉ định."""
         if tui is not None:
             tui.append_fragments(fragments, room_key=room_key)
         else:
@@ -559,17 +599,21 @@ def run_cli(
             fallback_ui.show_notification(plain)
 
     def has_room_fn(room_key) -> bool:
+        """Kiểm tra phòng chat đã được khởi tạo trên TUI hay chưa."""
         return tui.has_room(room_key) if tui is not None else False
 
     def on_room_locked(peer_id: tuple[str, int], peer_label: str) -> None:
+        """Chuyển giao diện phòng chat sang trạng thái chỉ đọc."""
         if tui is not None:
             tui.update_room_readonly(peer_id, peer_label, is_readonly=True)
 
     def on_refresh() -> None:
+        """Yêu cầu giao diện vẽ lại khung hình mới."""
         if tui is not None:
             tui.invalidate()
 
     def apply_local_status(new_status: str, reason: str | None = None) -> None:
+        """Cập nhật trạng thái cá nhân và phát gói thông báo UDP."""
         with state_lock:
             changed = state["my_status"] != new_status
             state["my_status"] = new_status
@@ -597,7 +641,9 @@ def run_cli(
         emit_room_fn(None, notice)
         if active_room is not None and has_room_fn(active_room):
             emit_room_fn(active_room, notice)
+
     def view_lobby_manual() -> None:
+        """Chuyển khung nhìn hiện tại về màn hình Lobby."""
         if tui is not None:
             tui.close_mobile_drawer()
 
@@ -629,6 +675,7 @@ def run_cli(
             tui.invalidate()
 
     def view_peer_manual(target: str, expected_peer_id: tuple[str, int] | None = None) -> None:
+        """Mở phòng của peer ở chế độ xem lịch sử hoặc chat hiện tại."""
         if tui is not None:
             tui.close_mobile_drawer()
 
@@ -695,6 +742,7 @@ def run_cli(
             tui.invalidate()
 
     def join_chat_with(target: str) -> None:
+        """Thiết lập kết nối và chuyển quyền nhập liệu sang peer được chọn."""
         if tui is not None:
             tui.close_mobile_drawer()
 
@@ -725,13 +773,10 @@ def run_cli(
             return
 
         if prev_active_id is not None and prev_active_id != target_id:
-            if tcp_manager:
-                try:
-                    tcp_manager.leave_chat(prev_active_id)
-                except Exception:
-                    pass
-            emit_room_fn(None, _format_leave_log(f"Left chat with {prev_active_name}."))
-            on_room_locked(prev_active_id, prev_active_name or "Peer")
+            on_room_locked(
+                prev_active_id,
+                f"{prev_active_name} ({prev_active_id[0]}:{prev_active_id[1]})",
+            )
 
         if tcp_manager:
             try:
@@ -781,6 +826,7 @@ def run_cli(
             emit_fn(_format_join_log(f"Joined chat with {peer_label}."))
 
     def leave_active_chat() -> None:
+        """Gửi BYE, ngắt phiên chat hiện tại và quay về Lobby."""
         ts = f" [{_now_str()}] "
         with state_lock:
             current_id = state["active_chat_id"]
@@ -838,6 +884,7 @@ def run_cli(
         on_refresh()
 
     def process_line(raw_input: str) -> bool:
+        """Phân tích và thực thi lệnh hoặc gửi tin nhắn người dùng nhập."""
         line = raw_input.strip()
         if not line:
             return False
