@@ -153,7 +153,7 @@ Trong lúc **Huy** và **Quan** đang mở phiên chat, đóng ngang cửa sổ 
 
 | Giao diện TUI bên Huy (Phát hiện mất kết nối) | Wireshark — Gói `[RST, ACK]` đột ngột |
 | :---: | :---: |
-| ![Huy phát hiện Quan ngắt kết nối đột ngột](Assets/Pasted%20image%2020261125173252.png) | ![Wireshark bắt gói RST ACK khi crash](Assets/Pasted%20image%2020261125173327.png) |
+| ![Huy phát hiện Quan ngắt kết nối đột ngột](Assets/Pasted%20image%2020261125173327.png) | ![Wireshark bắt gói RST ACK khi crash](Assets/Pasted%20image%2020261125173252.png) |
 
 - **Đối chiếu kỹ thuật:** Khác với cờ `[FIN, ACK]` khi dùng `/leave`, việc tắt ngang tiến trình khiến hệ điều hành Windows phát gói **`[RST, ACK]`** (`Frame 119332`, `49806 -> 5000`). Socket phía Huy lập tức nhận diện EOF/Reset, báo `[Read-Only] Quan disconnected unexpectedly (connection lost).` và khóa khung nhập an toàn.
 
