@@ -17,9 +17,9 @@ Dự án triển khai các nội dung chính của Socket Programming:
 
 ### 👥 Nhóm thực hiện
 
-- **Vũ Thanh Phong** – 25120219
-- **Nguyễn Hoàng Huy** – 25120193
-- **Nguyễn Vũ Nhật Quang** – 25120225
+- **Vũ Thanh Phong** – 25120219 - Tầng Giao vận TCP, Giao thức & Wireshark
+- **Nguyễn Hoàng Huy** – 25120193 - Quản lý Peer, Truyền File & Báo cáo
+- **Nguyễn Vũ Nhật Quang** – 25120225 - Khám phá UDP & Toàn bộ Giao diện TUI/CLI
 
 ## ✨ Features
 
